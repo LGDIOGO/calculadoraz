@@ -438,6 +438,14 @@
     </div>
     <div class="product-list" id="materials-list" style="flex: none; height: 160px; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 8px;"></div>
 
+    <div class="sidebar-section">
+      <div class="sidebar-section-label" style="display:flex; justify-content:space-between; align-items:center;">
+        <span>Impostos Salvos</span>
+        <button onclick="newTax()" style="background:transparent;border:none;color:var(--green);cursor:pointer;font-weight:bold;font-size:16px;">+</button>
+      </div>
+    </div>
+    <div class="product-list" id="taxes-list" style="flex: none; height: 120px; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 8px;"></div>
+
     <div class="sidebar-footer">
       <div class="user-info">
         <div class="user-avatar" id="user-avatar">?</div>
@@ -657,6 +665,7 @@ async function loadSettings() {
   if (!currentUserSettings.packages) currentUserSettings.packages = [];
   if (!currentUserSettings.taxes) currentUserSettings.taxes = [];
   renderMaterialsSidebar();
+  renderTaxesSidebar();
 }
 
 async function saveSettings() {
@@ -780,6 +789,29 @@ function newTax() {
   if(currentProduct) renderCostSection();
 }
 
+function renderTaxesSidebar() {
+  const el = document.getElementById('taxes-list');
+  if (!currentUserSettings.taxes.length) {
+    el.innerHTML = `<div style="padding: 8px 10px; font-size: 11px; color: rgba(255, 255, 255, 0.5);">Nenhum salvo</div>`;
+    return;
+  }
+  el.innerHTML = currentUserSettings.taxes.map((t, i) => `
+    <div class="product-item" style="font-size: 12px; padding: 6px 10px;">
+      <span class="product-item-name" style="flex:1;">${t.name} <br><span style="font-size:10px; opacity:0.7;">${fmtIn(t.pct)}%</span></span>
+      <button class="product-delete" onclick="deleteTax(${i}, event)" title="Excluir">×</button>
+    </div>
+  `).join('');
+  if (currentProduct) renderCostSection();
+}
+
+function deleteTax(i, e) {
+  e.stopPropagation();
+  if (!confirm('Excluir este imposto salvo?')) return;
+  currentUserSettings.taxes.splice(i, 1);
+  saveSettings();
+  renderTaxesSidebar();
+}
+
 function applyMaterial(i) {
   if (i === "") return;
   const m = currentUserSettings.materials[i];
@@ -792,6 +824,11 @@ function applyMaterial(i) {
 function toggleColor(name, priceKg, isChecked) {
   if (!currentProduct.selectedColors) currentProduct.selectedColors = [];
   if (isChecked) {
+    if (currentProduct.selectedColors.length >= 10) {
+      showToast("Limite de 10 cores simultâneas atingido.", "error");
+      renderCostSection();
+      return;
+    }
     if (!currentProduct.selectedColors.find(c => c.name === name)) {
       currentProduct.selectedColors.push({ name, priceKg });
     }
@@ -873,8 +910,8 @@ function renderCostSection() {
             <input type="hidden" id="available-colors" value="${p.availableColors||''}">
           </div>
           <div class="field-group" style="flex: 1; min-width: 120px; align-self:flex-start;">
-            <label>Nº de Variações na Tela</label>
-            <input type="text" inputmode="numeric" id="max-qty" class="field-input" style="margin:0; text-align: center;" value="${p.maxQuantities || 5}" oninput="onMaxQty(this.value)" placeholder="1 a 10">
+            <label>Nº de Variações</label>
+            <input type="text" inputmode="numeric" id="max-qty" class="field-input" style="margin:0; text-align: center;" value="${p.maxQuantities || 5}" oninput="onMaxQty(this.value)" placeholder="1 a 15">
           </div>
         </div>
       </div>
@@ -974,7 +1011,7 @@ function renderCostSection() {
             <input type="text" inputmode="decimal" id="packaging" value="${valBR(p.packagingCost)}" oninput="onPackaging(this.value)">
           </div>
           <div class="field-group">
-            <label>📢 Ads / un. (R$)</label>
+            <label>📢 Ads</label>
             <input type="text" inputmode="decimal" id="ads-cost" style="margin-top:23px;" value="${valBR(p.adsCost)}" oninput="onAds(this.value)">
           </div>
         </div>
@@ -999,7 +1036,7 @@ function renderAllQtyCards() {
   const container = document.getElementById('qty-cards');
   if (!container) return;
   container.innerHTML = '';
-  const max = Math.max(1, Math.min(10, parseInt(currentProduct.maxQuantities) || 10)); // max 10
+  const max = Math.max(1, Math.min(15, parseInt(currentProduct.maxQuantities) || 15)); // max 15
   
   while (currentProduct.quantities.length < max) {
     const nextQ = currentProduct.quantities.length + 1;
@@ -1108,7 +1145,7 @@ function buildQtyCard(idx) {
         <div class="qty-stat-value" id="stat-acc-${idx}">${fmt(tapeCost + accCost)}</div>
       </div>
       <div class="qty-stat">
-        <div class="qty-stat-label">Ads (un)</div>
+        <div class="qty-stat-label">Ads</div>
         <div class="qty-stat-value" id="stat-ads-${idx}">${fmt(adsVal)}</div>
       </div>
       <div class="qty-stat">
