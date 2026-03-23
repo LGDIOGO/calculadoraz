@@ -524,7 +524,9 @@ function defaultProduct(title = 'Novo Produto') {
     filamentType: 'PLA',
     filamentPriceKg: 0,
     filamentGrams: 0,
+    energyCost: 0,
     taxPct: 0,
+    useTape: true,
     tapeRollPrice: 170,
     tapeRollM: 33,
     tapeCmUnit: 6,
@@ -544,9 +546,10 @@ function defaultProduct(title = 'Novo Produto') {
 // ---- CALCULATOR ----
 function calcCostPerUnit(p) {
   const filament = (p.filamentPriceKg / 1000) * p.filamentGrams;
-  const tape     = p.tapeRollM > 0 ? (p.tapeRollPrice / (p.tapeRollM * 100)) * p.tapeCmUnit : 0;
+  const energy   = parseFloat(p.energyCost) || 0;
+  const tape     = (p.useTape !== false && p.tapeRollM > 0) ? (p.tapeRollPrice / (p.tapeRollM * 100)) * p.tapeCmUnit : 0;
   const acc      = (p.accessories || []).reduce((s, a) => s + (parseFloat(a.cost) || 0), 0);
-  return filament + tape + acc + (parseFloat(p.packagingCost) || 0) + (parseFloat(p.adsCost) || 0);
+  return filament + energy + tape + acc + (parseFloat(p.packagingCost) || 0) + (parseFloat(p.adsCost) || 0);
 }
 
 function priceFromMargin(totalCost, margin, p) {
@@ -711,8 +714,8 @@ function renderEditor() {
 function renderCostSection() {
   const p = currentProduct;
   const cpu = calcCostPerUnit(p);
-  const filCost = ((p.filamentPriceKg / 1000) * p.filamentGrams);
-  const tapCost = p.tapeRollM > 0 ? (p.tapeRollPrice / (p.tapeRollM * 100)) * p.tapeCmUnit : 0;
+  const filCost = ((p.filamentPriceKg / 1000) * p.filamentGrams) + (parseFloat(p.energyCost) || 0);
+  const tapCost = (p.useTape !== false && p.tapeRollM > 0) ? (p.tapeRollPrice / (p.tapeRollM * 100)) * p.tapeCmUnit : 0;
 
   const accHTML = (p.accessories || []).map((a, i) => `
     <div class="accessory-row" data-acc="${i}">
@@ -728,7 +731,7 @@ function renderCostSection() {
 
       <div class="cost-group">
         <div class="cost-group-header">
-          <span class="cost-group-label">🧵 Filamento</span>
+          <span class="cost-group-label">🧵 Peça Impressa</span>
           <span class="cost-calc" id="fil-cost">${fmt(filCost)}</span>
         </div>
         <div class="fields-row">
@@ -741,22 +744,31 @@ function renderCostSection() {
             </select>
           </div>
           <div class="field-group">
-            <label>Preço por kg (R$)</label>
+            <label>Preço/kg (R$)</label>
             <input type="number" id="fil-price-kg" step="0.01" value="${p.filamentPriceKg || ''}" placeholder="0,00" oninput="onFilPrice(this.value)">
           </div>
           <div class="field-group">
-            <label>Gramas usadas (g)</label>
+            <label>Gramas (g)</label>
             <input type="number" id="fil-grams" step="0.1" value="${p.filamentGrams || ''}" placeholder="0" oninput="onFilGrams(this.value)">
+          </div>
+          <div class="field-group">
+            <label>Energia/peça (R$)</label>
+            <input type="number" id="energy-cost" step="0.01" value="${p.energyCost || ''}" placeholder="0,00" oninput="onEnergy(this.value)" style="font-style: italic;">
           </div>
         </div>
       </div>
 
       <div class="cost-group">
-        <div class="cost-group-header">
-          <span class="cost-group-label">📏 Fita Dupla Face</span>
-          <span class="cost-calc" id="tape-cost">${fmt(tapCost)}</span>
+        <div class="cost-group-header" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span class="cost-group-label" style="margin-bottom: 0;">📏 Fita Dupla Face</span>
+            <label style="font-size: 11px; display: flex; align-items: center; gap: 4px; cursor: pointer; color: var(--text-secondary); margin-bottom: 0;">
+              <input type="checkbox" id="use-tape" ${p.useTape !== false ? 'checked' : ''} onchange="onUseTape(this.checked)"> Usar fita
+            </label>
+          </div>
+          <span class="cost-calc" id="tape-cost" style="${p.useTape !== false ? '' : 'display:none;'}">${fmt(tapCost)}</span>
         </div>
-        <div class="fields-row">
+        <div class="fields-row" id="tape-fields" style="${p.useTape !== false ? '' : 'display:none;'}">
           <div class="field-group">
             <label>Preço do rolo (R$)</label>
             <input type="number" id="tape-roll-price" step="0.01" value="${p.tapeRollPrice}" oninput="onTape()">
@@ -831,6 +843,14 @@ function buildQtyCard(idx) {
   const pct  = anuncioPct(idx);
   const autoAnuncio = price * (1 + pct);
   const anuncioVal = q.manualAdPrice != null ? q.manualAdPrice : autoAnuncio;
+  
+  const taxVal    = price * (parseFloat(p.taxPct || 0) / 100);
+  const printCost = (((p.filamentPriceKg / 1000) * p.filamentGrams) + (parseFloat(p.energyCost) || 0)) * q.qty;
+  const pkgCost   = (parseFloat(p.packagingCost) || 0) * q.qty;
+  const adsVal    = (parseFloat(p.adsCost) || 0) * q.qty;
+  const tapeCost  = (p.useTape !== false && p.tapeRollM > 0 ? (p.tapeRollPrice / (p.tapeRollM * 100)) * p.tapeCmUnit : 0) * q.qty;
+  const accCost   = (p.accessories || []).reduce((s, a) => s + (parseFloat(a.cost) || 0), 0) * q.qty;
+  const offPct    = (anuncioVal - price) / price;
 
   const div = document.createElement('div');
   div.className = 'qty-card';
@@ -855,25 +875,44 @@ function buildQtyCard(idx) {
         <div class="anuncio-label">Valor do anúncio cadastrado</div>
         <div class="anuncio-sub">Preço final ${fmtPct(pct)} sobre o valor de venda</div>
       </div>
-      <div class="anuncio-price">
-        <span style="font-size: 16px; font-weight: 600; color: var(--amber-text);">R$</span>
-        <input type="number" id="anuncio-${idx}" value="${fmtIn(anuncioVal)}" onblur="onAnuncioBlur(${idx}, this.value)" style="width: 80px; background: transparent; border: none; border-bottom: 2px dashed #b45309; font-family: inherit; font-size: 18px; font-weight: 700; color: var(--amber-text); outline: none; text-align: right; font-style: italic;">
+      <div class="anuncio-price" style="display: flex; gap: 8px; align-items: center;">
+        <div style="display: flex; align-items: center;">
+          <span style="font-size: 16px; font-weight: 600; color: var(--amber-text);">R$</span>
+          <input type="number" id="anuncio-${idx}" value="${fmtIn(anuncioVal)}" onblur="onAnuncioBlur(${idx}, this.value)" style="width: 80px; background: transparent; border: none; border-bottom: 2px dashed #b45309; font-family: inherit; font-size: 18px; font-weight: 700; color: var(--amber-text); outline: none; text-align: right; font-style: italic;">
+        </div>
+        <button id="btn-reset-anuncio-${idx}" onclick="resetAnuncio(${idx})" style="background:transparent; border:none; color: var(--text-tertiary); cursor: pointer; font-size: 11px; text-decoration: underline; display: ${q.manualAdPrice != null ? 'block' : 'none'}; padding: 0;">Restaurar</button>
       </div>
-      <span class="off-pill" id="off-pill-${idx}">${Math.round(pct*100)}% off</span>
+      <span class="off-pill" id="off-pill-${idx}">${Math.round(offPct * 100)}% off</span>
     </div>
 
-    <div class="qty-stats">
+    <div class="qty-stats" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; font-size: 10px;">
       <div class="qty-stat">
-        <div class="qty-stat-label">Custo total</div>
-        <div class="qty-stat-value" id="stat-tc-${idx}">${fmt(tc)}</div>
+        <div class="qty-stat-label">Custo Peça</div>
+        <div class="qty-stat-value" id="stat-print-${idx}">${fmt(printCost)}</div>
+      </div>
+      <div class="qty-stat">
+        <div class="qty-stat-label">Embalagem</div>
+        <div class="qty-stat-value" id="stat-pkg-${idx}">${fmt(pkgCost)}</div>
+      </div>
+      <div class="qty-stat">
+        <div class="qty-stat-label">Fita/Acess.</div>
+        <div class="qty-stat-value" id="stat-acc-${idx}">${fmt(tapeCost + accCost)}</div>
+      </div>
+      <div class="qty-stat">
+        <div class="qty-stat-label">Ads (un)</div>
+        <div class="qty-stat-value" id="stat-ads-${idx}">${fmt(adsVal)}</div>
+      </div>
+      <div class="qty-stat">
+        <div class="qty-stat-label">Imposto</div>
+        <div class="qty-stat-value" id="stat-tax-${idx}">${fmt(taxVal)}</div>
       </div>
       <div class="qty-stat">
         <div class="qty-stat-label">Taxas Shopee</div>
         <div class="qty-stat-value" id="stat-fees-${idx}">${fmt(fees)}</div>
       </div>
-      <div class="qty-stat">
-        <div class="qty-stat-label">Lucro líquido</div>
-        <div class="qty-stat-value profit" id="stat-profit-${idx}">${fmt(profit)}</div>
+      <div class="qty-stat" style="grid-column: span 3; display: flex; justify-content: space-between; align-items: center; background: rgba(59, 130, 246, 0.05); border: 1px solid rgba(59, 130, 246, 0.2); padding: 6px 8px; border-radius: 4px; margin-top: 4px;">
+        <span class="qty-stat-label" style="font-size: 11px; font-weight: 600; color: var(--text-primary); margin-bottom: 0;">Lucro Líquido Total</span>
+        <span class="qty-stat-value profit" id="stat-profit-${idx}" style="font-size: 14px;">${fmt(profit)}</span>
       </div>
     </div>
 
@@ -908,17 +947,37 @@ function updateQtyCard(idx) {
   const autoAnuncio = price * (1 + pct);
   const anuncioVal = q.manualAdPrice != null ? q.manualAdPrice : autoAnuncio;
 
+  const taxVal    = price * (parseFloat(p.taxPct || 0) / 100);
+  const printCost = (((p.filamentPriceKg / 1000) * p.filamentGrams) + (parseFloat(p.energyCost) || 0)) * q.qty;
+  const pkgCost   = (parseFloat(p.packagingCost) || 0) * q.qty;
+  const adsVal    = (parseFloat(p.adsCost) || 0) * q.qty;
+  const tapeCost  = (p.useTape !== false && p.tapeRollM > 0 ? (p.tapeRollPrice / (p.tapeRollM * 100)) * p.tapeCmUnit : 0) * q.qty;
+  const accCost   = (p.accessories || []).reduce((s, a) => s + (parseFloat(a.cost) || 0), 0) * q.qty;
+  const offPct    = (anuncioVal - price) / price;
+
   el('price-in-'+idx).value = fmtIn(price);
   if(el('anuncio-'+idx)) el('anuncio-'+idx).value = fmtIn(anuncioVal);
-  el('off-pill-'+idx).textContent = Math.round(pct*100) + '% off';
-  el('stat-tc-'+idx).textContent = fmt(tc);
-  el('stat-fees-'+idx).textContent = fmt(fees);
-  el('stat-profit-'+idx).textContent = fmt(profit);
+  if(el('btn-reset-anuncio-'+idx)) el('btn-reset-anuncio-'+idx).style.display = q.manualAdPrice != null ? 'block' : 'none';
+  if(el('off-pill-'+idx)) el('off-pill-'+idx).textContent = Math.round(offPct * 100) + '% off';
+
+  if(el('stat-print-'+idx)) el('stat-print-'+idx).textContent = fmt(printCost);
+  if(el('stat-pkg-'+idx)) el('stat-pkg-'+idx).textContent = fmt(pkgCost);
+  if(el('stat-acc-'+idx)) el('stat-acc-'+idx).textContent = fmt(tapeCost + accCost);
+  if(el('stat-ads-'+idx)) el('stat-ads-'+idx).textContent = fmt(adsVal);
+  if(el('stat-tax-'+idx)) el('stat-tax-'+idx).textContent = fmt(taxVal);
+  if(el('stat-fees-'+idx)) el('stat-fees-'+idx).textContent = fmt(fees);
+  if(el('stat-profit-'+idx)) el('stat-profit-'+idx).textContent = fmt(profit);
+
   el('sl-'+idx).value = q.margin.toFixed(2);
   el('margin-display-'+idx).textContent = q.margin.toFixed(2) + '%';
   [0,1,2].forEach(ci => {
     el(`ctag-${idx}-${ci}`).innerHTML = compTag(price, q.comps[ci]);
   });
+}
+
+function resetAnuncio(idx) {
+  currentProduct.quantities[idx].manualAdPrice = null;
+  updateQtyCard(idx);
 }
 
 function onAnuncioBlur(idx, raw) {
@@ -938,8 +997,8 @@ function updateAllQtyCards() {
 
 function updateCostCalcs() {
   const p = currentProduct;
-  const filCost = ((p.filamentPriceKg / 1000) * p.filamentGrams);
-  const tapCost = p.tapeRollM > 0 ? (p.tapeRollPrice / (p.tapeRollM * 100)) * p.tapeCmUnit : 0;
+  const filCost = ((p.filamentPriceKg / 1000) * p.filamentGrams) + (parseFloat(p.energyCost)||0);
+  const tapCost = (p.useTape !== false && p.tapeRollM > 0) ? (p.tapeRollPrice / (p.tapeRollM * 100)) * p.tapeCmUnit : 0;
   if (el('fil-cost'))  el('fil-cost').textContent  = fmt(filCost);
   if (el('tape-cost')) el('tape-cost').textContent = fmt(tapCost);
   updateAllQtyCards();
@@ -949,6 +1008,8 @@ function updateCostCalcs() {
 function onFilType(v)    { currentProduct.filamentType = v; }
 function onFilPrice(v)   { currentProduct.filamentPriceKg = parseBR(v); updateCostCalcs(); }
 function onFilGrams(v)   { currentProduct.filamentGrams = parseBR(v); updateCostCalcs(); }
+function onEnergy(v)     { currentProduct.energyCost = parseBR(v); updateCostCalcs(); }
+function onUseTape(v)    { currentProduct.useTape = v; updateCostCalcs(); renderCostSection(); }
 function onTax(v)        { currentProduct.taxPct = parseBR(v); updateCostCalcs(); }
 function onTape()        {
   currentProduct.tapeRollPrice = parseBR(el('tape-roll-price').value);
@@ -1018,6 +1079,8 @@ function readFormIntoProduct() {
   if (el('fil-type'))        currentProduct.filamentType    = el('fil-type').value;
   if (el('fil-price-kg'))    currentProduct.filamentPriceKg = parseBR(el('fil-price-kg').value);
   if (el('fil-grams'))       currentProduct.filamentGrams   = parseBR(el('fil-grams').value);
+  if (el('energy-cost'))     currentProduct.energyCost      = parseBR(el('energy-cost').value);
+  if (el('use-tape'))        currentProduct.useTape         = el('use-tape').checked;
   if (el('tax-pct'))         currentProduct.taxPct          = parseBR(el('tax-pct').value);
   if (el('tape-roll-price')) currentProduct.tapeRollPrice   = parseBR(el('tape-roll-price').value);
   if (el('tape-roll-m'))     currentProduct.tapeRollM       = parseBR(el('tape-roll-m').value);
