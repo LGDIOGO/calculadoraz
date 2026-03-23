@@ -47,7 +47,7 @@
       color: var(--text-primary);
       height: 100vh;
       overflow: hidden;
-      font-size: 14px;
+      font-size: 15px;
     }
 
     /* ---- LOGIN ---- */
@@ -74,10 +74,10 @@
     .login-logo svg { width: 24px; height: 24px; fill: white; }
     .login-card h1 { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
     .login-card p { font-size: 13px; color: var(--text-secondary); margin-bottom: 1.75rem; }
-    .field-label { font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.05em; }
+    .field-label { font-size: 13px; font-weight: 700; color: var(--text-secondary); margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.05em; }
     .field-input {
       width: 100%; padding: 10px 12px; border: 1.5px solid var(--border);
-      border-radius: var(--radius-sm); font-family: inherit; font-size: 14px;
+      border-radius: var(--radius-sm); font-family: inherit; font-size: 15px;
       outline: none; transition: border-color 0.15s; margin-bottom: 1rem;
       font-style: italic;
     }
@@ -110,8 +110,18 @@
     .setup-card ol { padding-left: 1.25rem; font-size: 13px; color: var(--text-secondary); line-height: 2; }
 
     /* ---- APP LAYOUT ---- */
-    #app { display: none; height: 100vh; }
+    #app { display: none; height: 100vh; overflow: hidden; }
     #app.visible { display: flex; }
+
+    /* Hamburger Menu for Mobile */
+    #menu-toggle {
+      display: none;
+      position: fixed; top: 15px; left: 15px;
+      z-index: 1000; background: var(--purple); color: white;
+      border: none; border-radius: 8px; width: 40px; height: 40px;
+      align-items: center; justify-content: center; cursor: pointer;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
 
     /* ---- SIDEBAR ---- */
     .sidebar {
@@ -418,6 +428,34 @@
     .field-input.req, select.req { border-color: var(--green); border-width: 1.5px; }
     .field-input.opt, select.opt { border-color: #cbd5e1; border-width: 1.5px; opacity: 0.9; }
 
+    /* ---- RESPONSIVE ---- */
+    @media (max-width: 1024px) {
+      .sidebar { width: 220px; min-width: 220px; }
+      #bulk-tools-container > div { padding-right: 20px !important; justify-content: center !important; }
+    }
+    @media (max-width: 768px) {
+      #menu-toggle { display: flex; }
+      .sidebar { position: fixed; left: -260px; top: 0; bottom: 0; z-index: 1000; transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1); box-shadow: 10px 0 30px rgba(0,0,0,0.3); }
+      .sidebar.open { left: 0; }
+      .main { padding: 60px 10px 20px; }
+      .main-header-content { flex-direction: column; align-items: stretch; gap: 10px; }
+      .qty-cards-grid { grid-template-columns: 1fr; }
+      .fields-row { grid-template-columns: 1fr !important; gap: 1rem; }
+      .variation-edit-row { flex-direction: column !important; align-items: stretch !important; gap: 12px !important; padding: 15px 0 !important; }
+      .variation-edit-row > div { width: 100% !important; min-width: 0 !important; }
+      .variation-edit-row button { width: 100% !important; height: 42px !important; }
+      .qty-stats { grid-template-columns: 1fr 1fr; }
+      .anuncio-box { flex-direction: column; align-items: stretch; gap: 10px; }
+      .anuncio-box > div { align-items: stretch !important; }
+      .anuncio-box input { width: 100% !important; }
+      #bulk-tools-container > div { flex-wrap: wrap; justify-content: center !important; padding-right: 0 !important; gap: 5px; }
+    }
+    .color-pill { display: flex; align-items: center; gap: 6px; padding: 6px 12px; background: #fff; border: 1px solid var(--border); border-radius: 20px; cursor: pointer; font-size: 13px; font-weight: 600; transition: all 0.2s; white-space: nowrap; user-select: none; position: relative; }
+    .color-pill:hover { border-color: var(--green); background: var(--purple-light); }
+    .color-pill.active { background: var(--purple); border-color: var(--purple); color: white; }
+    .color-pill input { position: absolute; opacity: 0; width: 0; height: 0; pointer-events: none; }
+    #menu-toggle { display: none; position: fixed; top: 10px; left: 10px; z-index: 1100; width: 40px; height: 40px; background: var(--purple); color: white; border: none; border-radius: 8px; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+
     /* ---- FAB SAVE ---- */
     .btn-fab-save {
       position: fixed; bottom: 24px; right: 24px;
@@ -475,45 +513,56 @@
         </button>
       </div>
 
-      <div class="sidebar-section" style="display:flex; justify-content:space-between; align-items:center;">
+      <div class="sidebar-section" style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;" onclick="toggleSidebarSection('products')">
         <div class="sidebar-section-label">Produtos</div>
-        <button onclick="newFolder()" style="background:transparent;border:none;color:var(--sidebar-text);cursor:pointer;font-size:16px;" title="Nova Pasta">📁+</button>
+        <span style="color:var(--amber); font-weight:800; font-size:18px; line-height:1;" id="icon-toggle-products">-</span>
       </div>
       
-      <div class="product-list-container" id="product-list">
-        <div style="padding: 8px 10px; font-size: 12px; color: rgba(255,255,255,0.5);">Carregando produtos...</div>
+      <div id="products-container" style="display:flex; flex-direction:column; flex:1; overflow:hidden;">
+        <div style="padding:0 0.75rem 0.5rem;"><button onclick="newFolder()" style="background:transparent;border:none;color:var(--sidebar-text);cursor:pointer;font-size:12px; display:flex; align-items:center; gap:4px;" title="Nova Pasta"><span style="color:var(--green); font-size:15px; font-weight:800;">+</span> Nova Pasta</button></div>
+        <div class="product-list-container" id="product-list">
+          <div style="padding: 8px 10px; font-size: 13px; color: rgba(255,255,255,0.5);">Carregando produtos...</div>
+        </div>
       </div>
-    </div>
 
     <div class="sidebar-config-area">
       <div class="sidebar-config-group">
         <div class="sidebar-section">
-          <div class="sidebar-section-label" style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 2px;">
+          <div class="sidebar-section-label" style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 2px; cursor:pointer;" onclick="toggleSidebarSection('materials')">
             <span>Cores Salvas</span>
-            <button onclick="newMaterial()" style="background:transparent;border:none;color:var(--green);cursor:pointer;font-weight:bold;font-size:16px;">+</button>
+            <span id="icon-toggle-materials" style="color:var(--amber); font-weight:800; font-size:18px; line-height:1;">-</span>
           </div>
         </div>
-        <div class="config-list" id="materials-list"></div>
+        <div id="materials-container">
+          <div class="config-list" id="materials-list"></div>
+          <div style="padding: 0 0.75rem 0.5rem;"><button onclick="newMaterial()" style="background:transparent;border:none;color:var(--green);cursor:pointer;font-size:12px; font-weight:700;">+ Nova Cor</button></div>
+        </div>
       </div>
 
       <div class="sidebar-config-group">
         <div class="sidebar-section">
-          <div class="sidebar-section-label" style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 2px;">
+          <div class="sidebar-section-label" style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 2px; cursor:pointer;" onclick="toggleSidebarSection('packages')">
             <span>Embalagens Salvas</span>
-            <button onclick="newPackage()" style="background:transparent;border:none;color:var(--green);cursor:pointer;font-weight:bold;font-size:16px;">+</button>
+            <span id="icon-toggle-packages" style="color:var(--amber); font-weight:800; font-size:18px; line-height:1;">-</span>
           </div>
         </div>
-        <div class="config-list" id="packages-list"></div>
+        <div id="packages-container">
+          <div class="config-list" id="packages-list"></div>
+          <div style="padding: 0 0.75rem 0.5rem;"><button onclick="newPackage()" style="background:transparent;border:none;color:var(--green);cursor:pointer;font-size:12px; font-weight:700;">+ Nova Emb.</button></div>
+        </div>
       </div>
 
       <div class="sidebar-config-group">
         <div class="sidebar-section">
-          <div class="sidebar-section-label" style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 2px;">
+          <div class="sidebar-section-label" style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 2px; cursor:pointer;" onclick="toggleSidebarSection('taxes')">
             <span>Impostos Salvos</span>
-            <button onclick="newTax()" style="background:transparent;border:none;color:var(--green);cursor:pointer;font-weight:bold;font-size:16px;">+</button>
+            <span id="icon-toggle-taxes" style="color:var(--amber); font-weight:800; font-size:18px; line-height:1;">-</span>
           </div>
         </div>
-        <div class="config-list" id="taxes-list"></div>
+        <div id="taxes-container">
+          <div class="config-list" id="taxes-list"></div>
+          <div style="padding: 0 0.75rem 0.5rem;"><button onclick="newTax()" style="background:transparent;border:none;color:var(--green);cursor:pointer;font-size:12px; font-weight:700;">+ Novo Imp.</button></div>
+        </div>
       </div>
     </div>
 
@@ -575,17 +624,18 @@ service cloud.firestore {
 
 <!-- LOADING -->
 <div class="loading-overlay" id="loading">
-  <div class="spinner"></div>
+  <div style="display:flex; flex-direction:column; align-items:center; gap:16px;">
+    <div style="width:40px; height:40px; border:4px solid #f3f4f6; border-top-color:var(--green); border-radius:50%; animation:spin 0.8s linear infinite;"></div>
+    <div style="color:var(--purple); font-weight:700; font-size:12px; letter-spacing:0.05em;">CARREGANDO...</div>
+  </div>
 </div>
+
+<button id="menu-toggle" onclick="toggleSidebar()">☰</button>
 
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
 
-<!-- FAB SAVE -->
-<button class="btn-fab-save hidden" id="fab-save" onclick="saveProduct()" title="Salvar Alterações">
-  <svg width="24" height="24" fill="currentColor" viewBox="0 0 24 24"><path d="M17 3H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V7l-4-4zm-5 16a3 3 0 110-6 3 3 0 010 6zm3-10H5V5h10v4z"/></svg>
-  <span id="fab-save-status">Salvar Produto</span>
-</button>
+<!-- FAB SAVE removed for better mobile UX -->
 
 <script>
 // ============================================================
@@ -745,6 +795,10 @@ async function loadSettings() {
   if (!currentUserSettings.packages) currentUserSettings.packages = [];
   if (!currentUserSettings.taxes) currentUserSettings.taxes = [];
   if (!currentUserSettings.folders) currentUserSettings.folders = [];
+  if (!currentUserSettings.uiState) currentUserSettings.uiState = { materials: false, packages: false, taxes: false, products: false };
+  
+  renderSidebarUIStates();
+
   renderSidebarGroup('materials', 'materials-list');
   renderSidebarGroup('packages', 'packages-list');
   renderSidebarGroup('taxes', 'taxes-list');
@@ -910,6 +964,37 @@ function toggleFolder(id) {
   }
 }
 
+function toggleSidebarSection(type) {
+  if (!currentUserSettings.uiState) currentUserSettings.uiState = { materials: false, packages: false, taxes: false, products: false };
+  currentUserSettings.uiState[type] = !currentUserSettings.uiState[type];
+  saveSettings();
+  renderSidebarUIStates();
+}
+
+function renderSidebarUIStates() {
+  const st = currentUserSettings.uiState || { materials: false, packages: false, taxes: false, products: false };
+  
+  const mCont = document.getElementById('materials-container');
+  const mIcon = document.getElementById('icon-toggle-materials');
+  if (mCont) mCont.style.display = st.materials ? 'none' : 'block';
+  if (mIcon) mIcon.innerText = st.materials ? '+' : '-';
+
+  const pCont = document.getElementById('packages-container');
+  const pIcon = document.getElementById('icon-toggle-packages');
+  if (pCont) pCont.style.display = st.packages ? 'none' : 'block';
+  if (pIcon) pIcon.innerText = st.packages ? '+' : '-';
+
+  const tCont = document.getElementById('taxes-container');
+  const tIcon = document.getElementById('icon-toggle-taxes');
+  if (tCont) tCont.style.display = st.taxes ? 'none' : 'block';
+  if (tIcon) tIcon.innerText = st.taxes ? '+' : '-';
+
+  const prCont = document.getElementById('products-container');
+  const prIcon = document.getElementById('icon-toggle-products');
+  if (prCont) prCont.style.display = st.products ? 'none' : 'flex';
+  if (prIcon) prIcon.innerText = st.products ? '+' : '-';
+}
+
 async function setProductFolder(productId) {
   const folders = currentUserSettings.folders || [];
   if (!folders.length) { alert('Crie uma pasta primeiro.'); return; }
@@ -1071,10 +1156,7 @@ function toggleColor(name, priceKg, isChecked) {
   } else {
     currentProduct.selectedColors = currentProduct.selectedColors.filter(c => c.name !== name);
   }
-  // Update color edit rows in top section without full re-render
-  const rowsDiv = document.getElementById('color-edit-rows');
-  if (rowsDiv) rowsDiv.innerHTML = buildColorEditRowsHTML(currentProduct);
-  else renderCostSection();
+  renderCostSection();
   renderAllQtyCards();
 }
 
@@ -1091,7 +1173,8 @@ function openProduct(id) {
 // ---- UI: EDITOR ----
 function showEmptyState() {
   document.getElementById('main-header').style.display = 'none';
-  document.getElementById('fab-save').classList.add('hidden');
+  const fab = document.getElementById('fab-save');
+  if (fab) fab.classList.add('hidden');
   document.getElementById('main-content').innerHTML = `
     <div class="empty-state">
       <div class="empty-icon">📦</div>
@@ -1103,7 +1186,8 @@ function showEmptyState() {
 function renderEditor() {
   if (!currentProduct) return;
   document.getElementById('main-header').style.display = 'flex';
-  document.getElementById('fab-save').classList.remove('hidden');
+  const fab = document.getElementById('fab-save');
+  if (fab) fab.classList.remove('hidden');
   document.getElementById('product-title').value = currentProduct.title || '';
   setStatus('');
   renderProductList();
@@ -1120,6 +1204,11 @@ function applyBulkWeight() {
   renderCostSection();
 }
 
+function toggleSidebar() {
+  const s = document.querySelector('.sidebar');
+  if (s) s.classList.toggle('open');
+}
+
 function buildColorEditRowsHTML(p) {
   if (!p.selectedColors || p.selectedColors.length === 0) return '';
   return p.selectedColors.map((c) => {
@@ -1127,10 +1216,10 @@ function buildColorEditRowsHTML(p) {
     const editPriceKg = c.priceKg || (savedMat ? savedMat.price : p.filamentPriceKg);
     const editGrams   = c.grams != null ? c.grams : p.filamentGrams;
     const editEnergy  = c.energyCost != null ? c.energyCost : p.energyCost;
-    return `<div style="display:flex; gap:8px; align-items:flex-end; padding:10px 0; border-bottom:1px dashed var(--border);">
+    return `<div class="variation-edit-row" style="display:flex; gap:8px; align-items:flex-end; padding:10px 0; border-bottom:1px dashed var(--border);">
       <div style="flex:2; min-width:140px;">
-        <div style="font-size:10px; color:var(--text-secondary); margin-bottom:5px; font-weight:600; text-transform:uppercase;">Material / Cor</div>
-        <input type="text" value="${c.name}" disabled style="width:100%; padding:8px 10px; font-size:12px; border:1px solid #d1d5db; border-radius:6px; background:#f3f4f6; color:#555; font-weight:600;">
+        <div style="font-size:12px; color:var(--purple); margin-bottom:5px; font-weight:800; text-transform:uppercase;">Material / Cor</div>
+        <input type="text" value="${c.name}" disabled style="width:100%; padding:8px 10px; font-size:14px; border:1px solid #d1d5db; border-radius:6px; background:#f3f4f6; color:#555; font-weight:600;">
       </div>
       <div style="flex:2; min-width:100px;">
         <div style="font-size:10px; color:var(--text-secondary); margin-bottom:5px; font-weight:600; text-transform:uppercase;">Preço/kg (R$)</div>
@@ -1166,9 +1255,9 @@ function renderCostSection() {
   // COLORS GENERATOR
   const coresSalvas = currentUserSettings?.materials || [];
   const coresHtml = coresSalvas.length > 0 ? coresSalvas.map((m) => {
-    const isChecked = p.selectedColors.some(sc => sc.name === m.name) ? 'checked' : '';
-    return `<label style="background:var(--main-bg); padding:4px 8px; border-radius:4px; font-size:11px; cursor:pointer; border:1px solid var(--border); display:flex; align-items:center; gap:6px; white-space:nowrap;">
-       <input type="checkbox" ${isChecked} onchange="toggleColor('${m.name}', ${m.price}, this.checked)">
+    const isChecked = p.selectedColors.some(sc => sc.name === m.name);
+    return `<label class="color-pill ${isChecked ? 'active' : ''}">
+       <input type="checkbox" ${isChecked ? 'checked' : ''} onchange="toggleColor('${m.name}', ${m.price}, this.checked)">
        ${m.name}
     </label>`;
   }).join('') : '';
@@ -1210,7 +1299,7 @@ function renderCostSection() {
       <div class="cost-group">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; gap:16px;">
           <div class="field-group" style="flex:3; margin:0;">
-            <label>Cores Disponíveis nas Variações</label>
+            <label style="font-size:14px; font-weight:800; color:var(--purple);">Cores Disponíveis nas Variações</label>
             <div style="display:flex; flex-wrap:wrap; gap:8px; padding:6px 0;">
               ${coresHtml}
               ${coresHtml === '' ? '<span style="font-size:11px; color:var(--text-tertiary); font-style:italic;">Nenhuma cor salva na lateral.</span>' : ''}
@@ -1260,7 +1349,7 @@ function renderCostSection() {
 
       <div class="cost-group">
         <div class="cost-group-header">
-          <span class="cost-group-label">Acessórios (Pés, Borrachas, Parafusos, etc)</span>
+          <span class="cost-group-label" style="font-size:14px; font-weight:800; color:var(--purple);">Acessórios (Pés, Borrachas, Parafusos, etc)</span>
           <span class="cost-calc" id="acc-calc-display">${fmt((p.accessories || []).reduce((s, a) => s + (parseFloat(a.cost) || 0), 0))}</span>
         </div>
         <div id="acc-list" style="margin-bottom:8px;">${accHTML}</div>
@@ -1268,7 +1357,7 @@ function renderCostSection() {
       </div>
 
       <div class="cost-group">
-        <div class="cost-group-header"><span class="cost-group-label">Custos Logísticos Globais</span></div>
+        <div class="cost-group-header"><span class="cost-group-label" style="font-size:14px; font-weight:800; color:var(--purple); text-transform:uppercase;">Custos Logísticos Globais</span></div>
         <div class="fields-row" style="grid-template-columns: repeat(3, 1fr);">
           <div class="field-group">
             <label style="margin-bottom:2px; font-weight:700;">Imposto (%)</label>
@@ -1385,22 +1474,22 @@ function createColorsTableHtml(p, q, idx) {
 
       <div style="color:var(--text-secondary); margin-bottom:10px; display:flex; gap:6px; flex-wrap:wrap; line-height:1.4;">
         <span style="font-size:13px; background:#e5e7eb; padding:2px 6px; border-radius:4px; color:#111;">Custo Total da Qtd: <b>${fmt(s.tcR)}</b></span>
-        <span style="font-size:11px;">Emb/Fita: ${fmt((s.pPkg+s.cTape+s.cAcc)*q.qty)} | Ads: ${fmt(s.pAds*q.qty)} | Imp: ${fmt(s.prS*(p.taxPct||0)/100)} | Taxas: ${fmt(s.res.fees)} </span>
+        <span style="font-size:11px;">Emb/Fita/Aces: ${fmt((s.pPkg+s.cTape+s.cAcc)*q.qty)} | Ads: ${fmt(s.pAds*q.qty)} | Imp: ${fmt(s.prS*(p.taxPct||0)/100)} | Taxas: ${fmt(s.res.fees)} </span>
       </div>
       <div style="display:flex; gap:10px; align-items:center;">
         <div style="flex:1; min-width:90px;">
           <div style="font-size:11px; font-weight:700; color:var(--text-tertiary); margin-bottom:4px;">Margem %</div>
-          <div style="display:flex; align-items:center; gap:6px;">
-            <input type="range" class="purple-slider" style="flex:1;" min="1" max="60" step="0.01" value="${s.cs.margin}" oninput="onColorMargin(${idx}, '${c.name}', this.value)">
-            <span style="font-size:13px; font-weight:800; width:40px; color:var(--purple);">${Number(s.cs.margin).toFixed(0)}%</span>
+          <div style="display:flex; align-items:center; gap:2px;">
+            <input type="range" class="purple-slider" style="flex:1;" min="1" max="60" step="0.01" value="${s.cs.margin}" oninput="onColorMarginInput(${idx}, '${c.name}', this.value)" onchange="updateQtyCard(${idx})">
+            <input type="text" inputmode="numeric" id="margin-pct-${idx}-${c.name.replace(/\s+/g,'-')}" style="font-size:13px; font-weight:800; width:30px; text-align:center; border:none; border-bottom:1px solid var(--purple); color:var(--purple); outline:none; background:transparent;" value="${Number(s.cs.margin).toFixed(0)}" onblur="onColorMarginManual(${idx}, '${c.name}', this.value)" onkeyup="if(event.key==='Enter') this.blur();">
+            <span style="font-size:13px; font-weight:800; color:var(--purple);">%</span>
           </div>
         </div>
         <div style="flex:1;">
-          <div style="font-size:12px; font-weight:700; color:var(--green); margin-bottom:4px; background:#dcfce7; padding:4px 8px; border-radius:6px; display:flex; justify-content:space-between; align-items:center;">
-             <span>Valor venda final</span>
-             <span style="font-size:10px; color:#166534;">${Math.round(s.res.margin)}% de lucro</span>
+          <div style="font-size:11px; font-weight:700; color:var(--green); margin-bottom:4px;">
+             <span>Valor de venda final</span>
           </div>
-          <input type="text" inputmode="decimal" class="field-input opt" style="width:100%; padding:8px; font-size:14px; font-weight:700; color:var(--green); border-color:var(--green); border-width:2px;" value="${fmtIn(s.prS)}" onblur="onColorPriceBlur(${idx}, '${c.name}', this.value)">
+          <input type="text" inputmode="decimal" id="price-in-${idx}-${c.name.replace(/\s+/g,'-')}" class="field-input opt" style="width:100%; padding:8px; font-size:14px; font-weight:700; color:var(--green); border-color:var(--green); border-width:2px;" value="${fmtIn(s.prS)}" onblur="onColorPriceBlur(${idx}, '${c.name}', this.value)">
         </div>
         <div style="width:110px;">
           <div style="font-size:12px; font-weight:600; color:var(--amber); margin-bottom:4px; display:flex; justify-content:space-between; align-items:center; gap:6px;">
@@ -1436,21 +1525,24 @@ function buildQtyCard(idx, q) {
       <div id="colortable-${idx}"></div>
 
       <div id="main-qty-content-${idx}" style="display:${displayMain};">
-        <div class="anuncio-box">
-          <div class="anuncio-left">
-            <div class="anuncio-label">Valor Venda + (${Math.round(anuncioPct(idx)*100)}%) Cadastro Base</div>
-            <div class="anuncio-sub">Acréscimo ref ao número de unidades</div>
+        <div class="anuncio-box" style="display:flex; justify-content:space-between; align-items:center; background:var(--card-bg); border:1px solid #fcd34d; border-radius:8px; padding:12px; margin-bottom:12px;">
+          <div class="anuncio-left" style="display:flex; flex-direction:column; gap:2px;">
+            <div class="anuncio-label" style="font-size:12px; font-weight:700; color:var(--amber-text);">Valor Venda + (${Math.round(anuncioPct(idx)*100)}%) Cadastro Base</div>
+            <div class="anuncio-sub" style="font-size:10px; color:var(--text-tertiary);">Acréscimo ref ao número de unidades</div>
           </div>
           <div style="display:flex; flex-direction:column; align-items:flex-end; gap:4px;">
-             <input type="text" inputmode="decimal" class="price-main-input opt" id="anuncio-${idx}" style="color:var(--amber-text); border-bottom-color:var(--amber); width:90px;" value="0,00" onblur="onAdBlur(${idx}, this.value)">
-             <div id="anuncio-reset-${idx}" style="display:none;font-size:10px;color:blue;cursor:pointer;text-decoration:underline;" onclick="resetAd(${idx})">Restaurar Original</div>
+             <input type="text" inputmode="decimal" class="price-main-input opt" id="anuncio-${idx}" style="color:var(--amber-text); border-bottom-color:var(--amber); width:90px; text-align:right; font-weight:800;" value="0,00" onblur="onAnuncioBlur(${idx}, this.value)">
+             <div id="anuncio-reset-${idx}" style="display:none;font-size:10px;color:var(--blue-text);cursor:pointer;text-decoration:underline;" onclick="resetAnuncio(${idx})">Restaurar Original</div>
           </div>
         </div>
 
         <div class="margin-row">
           <span class="margin-label">Margem Desejada:</span>
-          <input type="range" id="margin-range-${idx}" min="1" max="60" step="0.01" value="${q.margin}" oninput="onMargin(${idx}, this.value)">
-          <span class="margin-display" id="margin-disp-${idx}">${Number(q.margin).toFixed(0)}%</span>
+          <input type="range" id="margin-range-${idx}" min="1" max="60" step="0.01" value="${q.margin}" oninput="onMarginInput(${idx}, this.value)" onchange="updateQtyCard(${idx})">
+          <div style="display:flex; align-items:center;">
+             <input type="text" inputmode="numeric" id="margin-disp-${idx}" class="margin-display" style="width:30px; text-align:center; border:none; border-bottom:1px solid var(--text-primary); outline:none; background:transparent; font-size:14px; font-weight:800; padding:0; height:18px;" value="${Number(q.margin).toFixed(0)}" onblur="onMarginManual(${idx}, this.value)" onkeyup="if(event.key==='Enter') this.blur();">
+             <span class="margin-display" style="margin-left:2px;">%</span>
+          </div>
         </div>
 
         <div class="qty-stats">
@@ -1528,7 +1620,7 @@ function updateQtyCard(idx) {
     else document.getElementById(`anuncio-reset-${idx}`).style.display = 'none';
 
     document.getElementById(`margin-range-${idx}`).value = q.margin;
-    document.getElementById(`margin-disp-${idx}`).textContent = Number(q.margin).toFixed(0) + '%';
+    document.getElementById(`margin-disp-${idx}`).value = Number(q.margin).toFixed(0);
   }
 
   let comparePrice = finalPrice;
@@ -1620,12 +1712,30 @@ function onMaxQty(v) {
 function onQtyLabel(idx, v) { currentProduct.quantities[idx].label = v; }
 function onQtyNum(idx, v)   { currentProduct.quantities[idx].qty = parseInt(v) || 1; updateQtyCard(idx); }
 
-function onMarginSlider(idx, v) {
+function onMarginInput(idx, v) {
   const margin = parseFloat(v);
-  currentProduct.quantities[idx].margin = margin;
+  const p = currentProduct;
+  const q = p.quantities[idx];
+  q.margin = margin;
+  q.manualPrice = null;
+
+  const disp = document.getElementById(`margin-disp-${idx}`);
+  if (disp) disp.value = Math.round(margin);
+  
+  const cpu = calcCostPerUnit(p);
+  const totalCost = cpu * q.qty;
+  let finalPrice = priceFromMargin(totalCost, margin, p);
+  const res = calcFromPrice(totalCost, finalPrice, p);
+
+  const priceInput = document.getElementById(`price-in-${idx}`);
+  if (priceInput) priceInput.value = fmtIn(finalPrice);
+  const profitDisp = document.getElementById(`stat-profit-${idx}`);
+  if (profitDisp) profitDisp.innerHTML = fmt(res.profit) + ` <span style="font-size:10px; color:var(--text-tertiary);">(${Math.round(res.margin)}%)</span>`;
+}
+function onMarginChange(idx, v) {
   updateQtyCard(idx);
 }
-function onMargin(idx, v) { onMarginSlider(idx, v); }
+function onMargin(idx, v) { onMarginInput(idx, v); updateQtyCard(idx); }
 
 function onAdBlur(idx, raw) {
   const q = currentProduct.quantities[idx];
@@ -1694,11 +1804,51 @@ function showToast(msg, type = '') {
 
 function renderQtySection() {}
 
-function onColorMargin(idx, cName, val) {
-  getCS(currentProduct.quantities[idx], cName).margin = parseFloat(val);
-  getCS(currentProduct.quantities[idx], cName).manualPrice = null; 
+function onColorMarginInput(idx, cName, val) {
+  const p = currentProduct;
+  const q = p.quantities[idx];
+  const cs = getCS(q, cName);
+  cs.margin = parseFloat(val);
+  cs.manualPrice = null; 
+
+  const safeName = cName.replace(/\s+/g,'-');
+  const dispSpan = document.getElementById(`margin-pct-${idx}-${safeName}`);
+  if (dispSpan) dispSpan.value = Math.round(cs.margin);
+
+  const c = p.selectedColors.find(x => x.name === cName);
+  const s = calcColorStats(p, q, c);
+
+  const priceInput = document.getElementById(`price-in-${idx}-${safeName}`);
+  if (priceInput) priceInput.value = fmtIn(s.prS);
+
+  const profitDiv = document.getElementById(`profit-disp-${idx}-${safeName}`);
+  if (profitDiv) profitDiv.innerText = `Lucro: R$ ${fmt(s.res.profit)}`;
+}
+function onColorMarginChange(idx, cName, val) {
   updateQtyCard(idx);
 }
+function onColorMargin(idx, cName, val) {
+  onColorMarginInput(idx, cName, val);
+  updateQtyCard(idx);
+}
+
+function onMarginManual(idx, val) {
+  const q = currentProduct.quantities[idx];
+  let v = parseInt(val) || 1;
+  if(v < 1) v = 1; if(v > 999) v = 999;
+  q.margin = v;
+  q.manualPrice = null;
+  updateQtyCard(idx);
+}
+
+function onColorMarginManual(idx, cName, val) {
+  let v = parseInt(val) || 1;
+  if(v < 1) v = 1; if(v > 999) v = 999;
+  getCS(currentProduct.quantities[idx], cName).margin = v;
+  getCS(currentProduct.quantities[idx], cName).manualPrice = null;
+  updateQtyCard(idx);
+}
+
 function onColorPriceBlur(idx, cName, raw) {
   const p = parseBR(raw);
   if (p <= 0) { updateQtyCard(idx); return; }
