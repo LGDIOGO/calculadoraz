@@ -861,10 +861,23 @@ function toggleColor(name, priceKg, isChecked) {
   if (!currentProduct.selectedColors) currentProduct.selectedColors = [];
   if (isChecked) {
     if (currentProduct.selectedColors.length >= 10) {
-      showToast("Limite de 10 cores simultâneas atingido.", "error");
+      showToast('Limite de 10 cores simultaneas atingido.', 'error');
       renderCostSection();
       return;
     }
+    if (!currentProduct.selectedColors.find(c => c.name === name)) {
+      currentProduct.selectedColors.push({ name, priceKg });
+    }
+  } else {
+    currentProduct.selectedColors = currentProduct.selectedColors.filter(c => c.name !== name);
+  }
+  // Update color edit rows in top section without full re-render
+  const rowsDiv = document.getElementById('color-edit-rows');
+  if (rowsDiv) rowsDiv.innerHTML = buildColorEditRowsHTML(currentProduct);
+  else renderCostSection();
+  renderAllQtyCards();
+  updateAllQtyCards();
+}
     if (!currentProduct.selectedColors.find(c => c.name === name)) {
       currentProduct.selectedColors.push({ name, priceKg });
     }
@@ -908,6 +921,35 @@ function renderEditor() {
   renderQtySection();
 }
 
+function buildColorEditRowsHTML(p) {
+  if (!p.selectedColors || p.selectedColors.length === 0) return '';
+  return p.selectedColors.map((c) => {
+    const savedMat = currentUserSettings.materials.find(m => m.name === c.name);
+    const editPriceKg = c.priceKg || (savedMat ? savedMat.price : p.filamentPriceKg);
+    const editGrams   = c.grams != null ? c.grams : p.filamentGrams;
+    const editEnergy  = c.energyCost != null ? c.energyCost : p.energyCost;
+    return `<div style="display:flex; gap:8px; align-items:flex-end; padding:8px 0; border-bottom:1px dashed var(--border);">
+      <div style="flex:2; min-width:100px;">
+        <div style="font-size:10px; color:var(--text-secondary); margin-bottom:3px; font-weight:600;">Material / Cor</div>
+        <input type="text" value="${c.name}" disabled style="width:100%; padding:6px 8px; font-size:12px; border:1px solid #d1d5db; border-radius:6px; background:#e5e7eb; color:#555; font-weight:600;">
+      </div>
+      <div style="flex:2; min-width:80px;">
+        <div style="font-size:10px; color:var(--text-secondary); margin-bottom:3px;">Preço/kg (R$)</div>
+        <input type="text" inputmode="decimal" id="top-pkg-${c.name}" value="${fmtIn(editPriceKg)}" class="field-input req" style="padding:6px 8px; font-size:12px;" oninput="onTopColorField('${c.name}')">
+      </div>
+      <div style="flex:1; min-width:65px;">
+        <div style="font-size:10px; color:var(--text-secondary); margin-bottom:3px;">Peso/un (g)</div>
+        <input type="text" inputmode="numeric" id="top-grm-${c.name}" value="${fmtIn(editGrams)}" class="field-input req" style="padding:6px 8px; font-size:12px;" oninput="onTopColorField('${c.name}')">
+      </div>
+      <div style="flex:1; min-width:65px;">
+        <div style="font-size:10px; color:var(--text-secondary); margin-bottom:3px;">Energia (R$)</div>
+        <input type="text" inputmode="decimal" id="top-nrg-${c.name}" value="${fmtIn(editEnergy)}" class="field-input opt" style="padding:6px 8px; font-size:12px;" oninput="onTopColorField('${c.name}')">
+      </div>
+      <button onclick="saveTopColorMaterial('${c.name}')" style="padding:6px 10px; font-size:11px; font-weight:600; background:var(--green); color:#fff; border:none; border-radius:6px; cursor:pointer; white-space:nowrap; margin-bottom:1px;">💾 Salvar</button>
+    </div>`;
+  }).join('');
+}
+
 function renderCostSection() {
   const p = currentProduct;
   if (!p.selectedColors) p.selectedColors = [];
@@ -945,55 +987,57 @@ function renderCostSection() {
       <option value="">-- Puxar Salva --</option>
       ${(currentUserSettings?.packages || []).map((b) => `<option value="${b.price}">${b.name} (R$${fmtIn(b.price)})</option>`).join('')}
     </select>`;
+  // Auto-select single saved tax/package
+  const autoTaxPct = (currentUserSettings?.taxes?.length === 1) ? currentUserSettings.taxes[0].pct : p.taxPct;
+  const autoPkgCost = (currentUserSettings?.packages?.length === 1) ? currentUserSettings.packages[0].price : p.packagingCost;
+  if (currentUserSettings?.taxes?.length === 1 && !p.taxPct) { p.taxPct = autoTaxPct; }
+  if (currentUserSettings?.packages?.length === 1 && !p.packagingCost) { p.packagingCost = autoPkgCost; }
+
+  const colorEditRowsHTML = buildColorEditRowsHTML(p);
+      <div class="field-group" style="flex:2;">
+        <label>Material Principal</label>
+        <input type="text" id="fil-type" class="field-input req" placeholder="Ex: PLA" value="${p.filamentType || ''}" oninput="onFilType(this.value)">
+      </div>
+      <div class="field-group" style="flex:2;">
+        <label>Preço/kg (R$)</label>
+        <input type="text" inputmode="decimal" id="fil-price-kg" class="field-input req" value="${valBR(p.filamentPriceKg)}" oninput="onFilPrice(this.value)">
+      </div>
+      <div class="field-group" style="flex:1;">
+        <label>Peso/un (g)</label>
+        <input type="text" inputmode="numeric" id="fil-grams" class="field-input req" value="${p.filamentGrams || ''}" oninput="onFilGrams(this.value)">
+      </div>
+      <div class="field-group" style="flex:1;">
+        <label>Energia/Outros (R$)</label>
+        <input type="text" inputmode="decimal" id="energy-cost" class="field-input opt" value="${valBR(p.energyCost)}" oninput="onEnergy(this.value)" placeholder="Ex: 0,50">
+      </div>
+    </div>`;
+
+  const taxAutoVal = (currentUserSettings?.taxes?.length === 1) ? currentUserSettings.taxes[0].pct : p.taxPct;
+  const pkgAutoVal = (currentUserSettings?.packages?.length === 1) ? currentUserSettings.packages[0].price : p.packagingCost;
 
   const costHTML = `
     <div class="section" id="cost-section">
       <div class="section-title">1. Configuração de Base da Peça</div>
-      
-      <div class="form-legend">
+      <div class="form-legend" style="margin-bottom:10px;">
         <div class="legend-item"><div class="legend-req"></div> <span style="color:var(--text-secondary);">Obrigatório</span></div>
         <div class="legend-item"><div class="legend-opt"></div> <span style="color:var(--text-secondary);">Opcional</span></div>
       </div>
-
       <div class="cost-group">
-        <div class="cost-group-header">
-          <span class="cost-group-label">Peça Impressa</span>
-          <span class="cost-calc">${fmt(filCost)}</span>
-        </div>
-        
-        <div class="fields-row" style="margin-bottom:12px;">
-          <div class="field-group" style="flex:3;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; gap:16px;">
+          <div class="field-group" style="flex:3; margin:0;">
             <label>Cores Disponíveis nas Variações</label>
             <div style="display:flex; flex-wrap:wrap; gap:8px; padding:6px 0;">
-              ${colorsHTML}
-              ${colorsHTML === '' ? '<span style="font-size:11px; color:var(--text-tertiary); font-style:italic;">Nenhuma cor salva na lateral.</span>' : ''}
+              ${coresHtml}
+              ${coresHtml === '' ? '<span style="font-size:11px; color:var(--text-tertiary); font-style:italic;">Nenhuma cor salva na lateral.</span>' : ''}
             </div>
             <input type="hidden" id="available-colors" value="${p.availableColors||''}">
           </div>
-          <div class="field-group" style="flex: 1; min-width: 120px; align-self:flex-start;">
+          <div class="field-group" style="flex:1; min-width:120px; margin:0; align-self:flex-start;">
             <label>Nº de Variações</label>
-            <input type="text" inputmode="numeric" id="max-qty" class="field-input req" style="margin:0; text-align: center;" value="${p.maxQuantities || 5}" oninput="onMaxQty(this.value)" placeholder="1 a 15">
+            <input type="text" inputmode="numeric" id="max-qty" class="field-input req" style="margin:0; text-align:center;" value="${p.maxQuantities || 5}" oninput="onMaxQty(this.value)" placeholder="1 a 15">
           </div>
         </div>
-
-        <div class="fields-row">
-          <div class="field-group">
-            <label>Material Principal</label>
-            <input type="text" id="fil-type" class="field-input req" placeholder="Ex: PLA" value="${p.filamentType || ''}" oninput="onFilType(this.value)">
-          </div>
-          <div class="field-group">
-            <label>Preço/kg (R$)</label>
-            <input type="text" inputmode="decimal" id="fil-price-kg" class="field-input req" value="${valBR(p.filamentPriceKg)}" oninput="onFilPrice(this.value)">
-          </div>
-          <div class="field-group">
-            <label>Peso (g)</label>
-            <input type="text" inputmode="numeric" id="fil-grams" class="field-input req" value="${p.filamentGrams || ''}" oninput="onFilGrams(this.value)">
-          </div>
-          <div class="field-group">
-            <label>Energia/Outros (R$)</label>
-            <input type="text" inputmode="decimal" id="energy-cost" class="field-input opt" value="${valBR(p.energyCost)}" oninput="onEnergy(this.value)" placeholder="Ex: 0,50">
-          </div>
-        </div>
+        <div id="color-edit-rows">${colorEditRowsHTML}</div>
       </div>
 
       <div class="cost-group">
@@ -1037,14 +1081,14 @@ function renderCostSection() {
               <label>Imposto Padrão (%)</label>
               ${taxSelectHTML}
             </div>
-            <input type="text" inputmode="decimal" id="tax-pct" class="field-input req" value="${valBR(p.taxPct)}" oninput="onTax(this.value)">
+            <input type="text" inputmode="decimal" id="tax-pct" class="field-input req" value="${valBR(taxAutoVal)}" oninput="onTax(this.value)">
           </div>
           <div class="field-group">
             <div style="display:flex; justify-content:space-between; align-items:flex-end;">
               <label>Embalagem Padrão (R$)</label>
               ${pkgSelectHTML}
             </div>
-            <input type="text" inputmode="decimal" id="packaging" class="field-input req" value="${valBR(p.packagingCost)}" oninput="onPackaging(this.value)">
+            <input type="text" inputmode="decimal" id="packaging" class="field-input req" value="${valBR(pkgAutoVal)}" oninput="onPackaging(this.value)">
           </div>
           <div class="field-group">
             <label>📢 Ads</label>
@@ -1079,7 +1123,8 @@ function renderAllQtyCards() {
   
   while (currentProduct.quantities.length < max) {
     const nextQ = currentProduct.quantities.length + 1;
-    currentProduct.quantities.push({ label: nextQ+' unidades', qty: nextQ, margin: 20, comps: ['','',''] });
+    const lbl = nextQ === 1 ? '1 unidade' : nextQ + ' unidades';
+    currentProduct.quantities.push({ label: lbl, qty: nextQ, margin: 20, comps: ['','',''] });
   }
 
   for (let i = 0; i < max; i++) {
@@ -1097,14 +1142,18 @@ function getCS(q, cName) {
 }
 
 function calcColorCost(p, c) {
-  const cFilCost = ((c.priceKg / 1000) * p.filamentGrams) + (parseFloat(p.energyCost)||0);
+  const grams    = c.grams != null ? c.grams : p.filamentGrams;
+  const energy   = c.energyCost != null ? c.energyCost : (parseFloat(p.energyCost)||0);
+  const cFilCost = ((c.priceKg / 1000) * grams) + energy;
   const cTape    = (p.useTape !== false && p.tapeRollM > 0) ? (p.tapeRollPrice / (p.tapeRollM * 100)) * p.tapeCmUnit : 0;
   const cAcc     = (p.accessories || []).reduce((s, a) => s + (parseFloat(a.cost) || 0), 0);
   return cFilCost + cTape + cAcc + (parseFloat(p.packagingCost) || 0) + (parseFloat(p.adsCost) || 0);
 }
 
 function calcColorStats(p, q, c) {
-  const cFilCost = ((c.priceKg / 1000) * p.filamentGrams) + (parseFloat(p.energyCost)||0);
+  const grams    = c.grams != null ? c.grams : p.filamentGrams;
+  const energy   = c.energyCost != null ? c.energyCost : (parseFloat(p.energyCost)||0);
+  const cFilCost = ((c.priceKg / 1000) * grams) + energy;
   const cTape    = (p.useTape !== false && p.tapeRollM > 0) ? (p.tapeRollPrice / (p.tapeRollM * 100)) * p.tapeCmUnit : 0;
   const cAcc     = (p.accessories || []).reduce((s, a) => s + (parseFloat(a.cost) || 0), 0);
   const pPkg     = (parseFloat(p.packagingCost) || 0);
@@ -1128,12 +1177,44 @@ function createColorsTableHtml(p, q, idx) {
       
   p.selectedColors.forEach((c) => {
     const s = calcColorStats(p, q, c);
+    const pctAcimaCadastrado = s.anuncioVal > 0 && s.prS > 0 ? Math.round(((s.anuncioVal - s.prS) / s.prS) * 100) : 0;
+    const pctAcimaVenda = s.tcR > 0 && s.prS > 0 ? Math.round(((s.prS - s.tcR) / s.tcR) * 100) : 0;
+    const savedMat = currentUserSettings.materials.find(m => m.name === c.name);
+    const editPriceKg = c.priceKg || (savedMat ? savedMat.price : p.filamentPriceKg);
+    const editGrams = c.grams != null ? c.grams : p.filamentGrams;
+    const editEnergy = c.energyCost != null ? c.energyCost : p.energyCost;
     html += `
     <div style="background:#f9fafb; border:1px solid var(--border); border-radius:6px; padding:10px;">
       <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px dashed #d1d5db; padding-bottom:6px; margin-bottom:8px;">
         <div style="font-weight:700; font-size:13px; color:var(--text-primary); text-transform:uppercase;">${c.name}</div>
         <div style="font-size:13px; font-weight:800; color:var(--blue-text);">Lucro: ${fmt(s.res.profit)}</div>
       </div>
+
+      <details style="margin-bottom:8px;">
+        <summary style="font-size:10px; font-weight:600; color:var(--text-tertiary); cursor:pointer; list-style:none; display:flex; align-items:center; gap:4px;">
+          ▸ Editar Material desta Cor
+        </summary>
+        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; align-items:flex-end; background:#f3f4f6; border-radius:6px; padding:8px;">
+          <div style="flex:2; min-width:80px;">
+            <div style="font-size:10px; color:var(--text-secondary); margin-bottom:3px;">Material</div>
+            <input type="text" id="ce-mat-${idx}-${c.name}" value="${c.name}" disabled style="width:100%; padding:4px 6px; font-size:11px; border:1px solid #d1d5db; border-radius:4px; background:#e5e7eb; color:#555;">
+          </div>
+          <div style="flex:2; min-width:70px;">
+            <div style="font-size:10px; color:var(--text-secondary); margin-bottom:3px;">Preço/kg (R$)</div>
+            <input type="text" inputmode="decimal" id="ce-pkg-${idx}-${c.name}" value="${fmtIn(editPriceKg)}" style="width:100%; padding:4px 6px; font-size:11px; border:1px solid #d1d5db; border-radius:4px;">
+          </div>
+          <div style="flex:1; min-width:55px;">
+            <div style="font-size:10px; color:var(--text-secondary); margin-bottom:3px;">Peso (g)</div>
+            <input type="text" inputmode="numeric" id="ce-grm-${idx}-${c.name}" value="${fmtIn(editGrams)}" style="width:100%; padding:4px 6px; font-size:11px; border:1px solid #d1d5db; border-radius:4px;">
+          </div>
+          <div style="flex:1; min-width:55px;">
+            <div style="font-size:10px; color:var(--text-secondary); margin-bottom:3px;">Energia (R$)</div>
+            <input type="text" inputmode="decimal" id="ce-nrg-${idx}-${c.name}" value="${fmtIn(editEnergy)}" style="width:100%; padding:4px 6px; font-size:11px; border:1px solid #d1d5db; border-radius:4px;">
+          </div>
+          <button onclick="saveColorMaterial('${c.name}', ${idx})" style="padding:6px 10px; font-size:11px; font-weight:600; background:var(--green); color:#fff; border:none; border-radius:4px; cursor:pointer; white-space:nowrap;">💾 Salvar</button>
+        </div>
+      </details>
+
       <div style="font-size:10px; color:var(--text-secondary); margin-bottom:10px; display:flex; gap:6px; flex-wrap:wrap; line-height:1.4;">
         <span style="background:#e5e7eb; padding:2px 6px; border-radius:4px; color:#111;">Custo Total da Qtd: <b>${fmt(s.tcR)}</b></span>
         <span>(Peça: ${fmt(s.cFilCost*q.qty)} | Emb/Fita: ${fmt((s.pPkg+s.cTape+s.cAcc)*q.qty)} | Ads: ${fmt(s.pAds*q.qty)} | Imp: ${fmt(s.prS*(p.taxPct||0)/100)} | Taxas: ${fmt(s.res.fees)})</span>
@@ -1147,12 +1228,12 @@ function createColorsTableHtml(p, q, idx) {
           </div>
         </div>
         <div>
-          <div style="font-size:10px; font-weight:600; color:var(--green); margin-bottom:4px;">Venda Padrão (R$)</div>
+          <div style="font-size:10px; font-weight:600; color:var(--green); margin-bottom:4px;">Venda Padrão (R$) <span style="font-size:9px; background:#dcfce7; color:#166534; padding:1px 5px; border-radius:10px;">${pctAcimaVenda}% acima custo</span></div>
           <input type="text" inputmode="decimal" class="field-input opt" style="width:75px; padding:6px; font-size:12px; font-weight:700; color:var(--green);" value="${fmtIn(s.prS)}" onblur="onColorPriceBlur(${idx}, '${c.name}', this.value)">
         </div>
         <div>
-          <div style="font-size:10px; font-weight:600; color:var(--amber); margin-bottom:4px; display:flex; justify-content:space-between; align-items:center;">
-            Cadastrado
+          <div style="font-size:10px; font-weight:600; color:var(--amber); margin-bottom:4px; display:flex; justify-content:space-between; align-items:center; gap:6px;">
+            <span>Cadastrado <span style="font-size:9px; background:#fef9c3; color:#854d0e; padding:1px 5px; border-radius:10px;">+${pctAcimaCadastrado}%</span></span>
             ${s.cs.manualAdPrice != null ? `<span style="font-size:9px; color:var(--text-secondary); cursor:pointer; text-decoration:underline;" onclick="resetColorAd(${idx}, '${c.name}')">Limpar</span>` : ''}
           </div>
           <input type="text" inputmode="decimal" class="field-input opt" style="width:75px; padding:6px; font-size:12px; font-weight:700; color:var(--amber-text); border-color:var(--amber);" value="${fmtIn(s.anuncioVal)}" onblur="onColorAdBlur(${idx}, '${c.name}', this.value)">
@@ -1460,6 +1541,71 @@ function onColorAdBlur(idx, cName, raw) {
 function resetColorAd(idx, cName) {
   getCS(currentProduct.quantities[idx], cName).manualAdPrice = null;
   updateQtyCard(idx);
+}
+
+function onTopColorField(cName) {
+  const priceKgEl = document.getElementById('top-pkg-' + cName);
+  const gramsEl   = document.getElementById('top-grm-' + cName);
+  const energyEl  = document.getElementById('top-nrg-' + cName);
+  const sc = currentProduct.selectedColors.find(x => x.name === cName);
+  if (!sc) return;
+  if (priceKgEl) sc.priceKg    = parseBR(priceKgEl.value);
+  if (gramsEl)   sc.grams      = parseBR(gramsEl.value);
+  if (energyEl)  sc.energyCost = parseBR(energyEl.value);
+  updateAllQtyCards();
+}
+
+function saveTopColorMaterial(cName) {
+  const priceKgEl = document.getElementById('top-pkg-' + cName);
+  const gramsEl   = document.getElementById('top-grm-' + cName);
+  const energyEl  = document.getElementById('top-nrg-' + cName);
+  if (!priceKgEl) return;
+  const newPriceKg = parseBR(priceKgEl.value);
+  const newGrams   = parseBR(gramsEl.value);
+  const newEnergy  = parseBR(energyEl.value);
+  const sc = currentProduct.selectedColors.find(x => x.name === cName);
+  if (sc) { sc.priceKg = newPriceKg; sc.grams = newGrams; sc.energyCost = newEnergy; }
+  const mat = currentUserSettings.materials.find(m => m.name === cName);
+  if (mat) {
+    mat.price = newPriceKg;
+    saveSettings();
+    renderSidebarGroup('materials', 'materials-list');
+    showToast('Cor "' + cName + '" atualizada nas cores salvas!', 'success');
+  } else {
+    showToast('Ajustes de "' + cName + '" aplicados neste produto.', 'success');
+  }
+  updateAllQtyCards();
+}
+
+function saveColorMaterial(cName, idx) {
+  const priceKgEl = document.getElementById(`ce-pkg-${idx}-${cName}`);
+  const gramsEl   = document.getElementById(`ce-grm-${idx}-${cName}`);
+  const energyEl  = document.getElementById(`ce-nrg-${idx}-${cName}`);
+  if (!priceKgEl) return;
+  const newPriceKg = parseBR(priceKgEl.value);
+  const newGrams   = parseBR(gramsEl.value);
+  const newEnergy  = parseBR(energyEl.value);
+
+  // Update the per-color overrides in selectedColors
+  const sc = currentProduct.selectedColors.find(x => x.name === cName);
+  if (sc) {
+    sc.priceKg    = newPriceKg;
+    sc.grams      = newGrams;
+    sc.energyCost = newEnergy;
+  }
+
+  // Update the saved material price in global settings
+  const mat = currentUserSettings.materials.find(m => m.name === cName);
+  if (mat) {
+    mat.price = newPriceKg;
+    saveSettings();
+    renderSidebarGroup('materials', 'materials-list');
+    showToast(`Cor "${cName}" atualizada nas cores salvas!`, 'success');
+  } else {
+    showToast(`Ajustes de "${cName}" aplicados neste produto.`, 'success');
+  }
+
+  updateAllQtyCards();
 }
 
 // ---- AUTH LISTENER ----
