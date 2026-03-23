@@ -1,0 +1,1047 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Zion - Calculadora de Preços</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --sidebar-bg: #541b7a;
+      --sidebar-hover: #40145c;
+      --sidebar-active: #c75a1b;
+      --sidebar-text: #e0c8ee;
+      --sidebar-text-active: #ffffff;
+      --main-bg: #f3f4f6;
+      --card-bg: #ffffff;
+      --border: #e5e7eb;
+      --text-primary: #111827;
+      --text-secondary: #6b7280;
+      --text-tertiary: #9ca3af;
+      --green: #c75a1b;
+      --green-light: #fcece3;
+      --green-text: #a94b15;
+      --amber: #d97706;
+      --amber-light: #fef3c7;
+      --amber-text: #92400e;
+      --blue-light: #dbeafe;
+      --blue-text: #1d4ed8;
+      --red: #dc2626;
+      --red-light: #fee2e2;
+      --red-text: #991b1b;
+      --radius: 10px;
+      --radius-sm: 6px;
+    }
+
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background: var(--main-bg);
+      color: var(--text-primary);
+      height: 100vh;
+      overflow: hidden;
+      font-size: 14px;
+    }
+
+    /* ---- LOGIN ---- */
+    #login-screen {
+      position: fixed; inset: 0;
+      background: linear-gradient(135deg, #541b7a 0%, #40145c 50%, #541b7a 100%);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 100;
+    }
+    .login-card {
+      background: #ffffff;
+      border-radius: 16px;
+      padding: 2.5rem 2rem;
+      width: 100%; max-width: 380px;
+      box-shadow: 0 25px 50px rgba(0,0,0,0.4);
+    }
+    .login-logo {
+      width: 44px; height: 44px;
+      background: var(--green);
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      margin-bottom: 1.25rem;
+    }
+    .login-logo svg { width: 24px; height: 24px; fill: white; }
+    .login-card h1 { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
+    .login-card p { font-size: 13px; color: var(--text-secondary); margin-bottom: 1.75rem; }
+    .field-label { font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.05em; }
+    .field-input {
+      width: 100%; padding: 10px 12px; border: 1.5px solid var(--border);
+      border-radius: var(--radius-sm); font-family: inherit; font-size: 14px;
+      outline: none; transition: border-color 0.15s; margin-bottom: 1rem;
+    }
+    .field-input:focus { border-color: var(--green); }
+    .btn-primary {
+      width: 100%; padding: 11px; background: var(--green); color: white;
+      border: none; border-radius: var(--radius-sm); font-family: inherit;
+      font-size: 14px; font-weight: 600; cursor: pointer; transition: background 0.15s;
+    }
+    .btn-primary:hover { background: #a94b15; }
+    .login-error { font-size: 12px; color: var(--red); margin-top: 8px; min-height: 16px; }
+
+    /* ---- SETUP WARNING ---- */
+    #setup-warning {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.7);
+      display: none; align-items: center; justify-content: center; z-index: 200;
+    }
+    #setup-warning.visible { display: flex; }
+    .setup-card {
+      background: #fff; border-radius: 16px; padding: 2rem;
+      max-width: 520px; width: 90%;
+    }
+    .setup-card h2 { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
+    .setup-card p { font-size: 13px; color: var(--text-secondary); margin-bottom: 12px; line-height: 1.6; }
+    .setup-card code {
+      display: block; background: #f3f4f6; padding: 12px;
+      border-radius: var(--radius-sm); font-size: 12px; font-family: monospace;
+      overflow-x: auto; margin-bottom: 12px; white-space: pre;
+    }
+    .setup-card ol { padding-left: 1.25rem; font-size: 13px; color: var(--text-secondary); line-height: 2; }
+
+    /* ---- APP LAYOUT ---- */
+    #app { display: none; height: 100vh; }
+    #app.visible { display: flex; }
+
+    /* ---- SIDEBAR ---- */
+    .sidebar {
+      width: 240px; min-width: 240px; background: var(--sidebar-bg);
+      display: flex; flex-direction: column; height: 100vh; overflow: hidden;
+    }
+    .sidebar-header {
+      padding: 1.25rem 1rem;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .sidebar-logo {
+      display: flex; align-items: center; gap: 10px;
+      color: white; font-weight: 700; font-size: 15px;
+    }
+    .sidebar-logo-icon {
+      width: 32px; height: 32px; background: var(--green);
+      border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    .sidebar-logo-icon svg { width: 18px; height: 18px; fill: white; }
+    .sidebar-logo span { color: #9ca3af; font-weight: 400; font-size: 11px; }
+
+    .sidebar-section { padding: 0.75rem 0.75rem 0; }
+    .sidebar-section-label {
+      font-size: 10px; font-weight: 600; color: #4b5563;
+      text-transform: uppercase; letter-spacing: 0.08em;
+      padding: 0 0.25rem; margin-bottom: 4px;
+    }
+
+    .btn-new-product {
+      display: flex; align-items: center; gap: 8px;
+      width: 100%; padding: 9px 12px; background: var(--green);
+      color: white; border: none; border-radius: var(--radius-sm);
+      font-family: inherit; font-size: 13px; font-weight: 600;
+      cursor: pointer; transition: background 0.15s; margin-bottom: 0.5rem;
+    }
+    .btn-new-product:hover { background: #a94b15; }
+
+    .product-list { flex: 1; overflow-y: auto; padding: 0.25rem 0.75rem; }
+    .product-list::-webkit-scrollbar { width: 4px; }
+    .product-list::-webkit-scrollbar-track { background: transparent; }
+    .product-list::-webkit-scrollbar-thumb { background: #374151; border-radius: 2px; }
+
+    .product-item {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 9px 10px; border-radius: var(--radius-sm);
+      cursor: pointer; transition: background 0.12s; margin-bottom: 2px;
+      color: var(--sidebar-text); font-size: 13px;
+    }
+    .product-item:hover { background: var(--sidebar-hover); color: white; }
+    .product-item.active { background: rgba(199,90,27,0.15); color: var(--green); }
+    .product-item-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .product-delete {
+      opacity: 0; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center;
+      border-radius: 4px; background: transparent; border: none; color: #9ca3af;
+      cursor: pointer; flex-shrink: 0; transition: all 0.12s; font-size: 14px;
+    }
+    .product-item:hover .product-delete { opacity: 1; }
+    .product-delete:hover { background: #dc2626; color: white; }
+
+    .sidebar-footer {
+      padding: 0.75rem; border-top: 1px solid rgba(255,255,255,0.06);
+    }
+    .user-info {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 10px; border-radius: var(--radius-sm);
+    }
+    .user-avatar {
+      width: 28px; height: 28px; border-radius: 50%; background: #374151;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px; font-weight: 700; color: #d1d5db; flex-shrink: 0;
+    }
+    .user-email { font-size: 11px; color: #6b7280; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .btn-logout {
+      padding: 5px 8px; background: transparent; border: 1px solid #374151;
+      color: #6b7280; border-radius: 4px; font-family: inherit; font-size: 11px;
+      cursor: pointer; transition: all 0.12s; white-space: nowrap;
+    }
+    .btn-logout:hover { border-color: #6b7280; color: #d1d5db; }
+
+    /* ---- MAIN ---- */
+    .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+    .main-header {
+      background: white; border-bottom: 1px solid var(--border);
+      padding: 0.875rem 1.5rem;
+      display: flex; align-items: center; gap: 12px;
+    }
+    .product-title-input {
+      flex: 1; font-family: inherit; font-size: 18px; font-weight: 700;
+      color: var(--text-primary); border: none; outline: none; background: transparent;
+      min-width: 0;
+    }
+    .product-title-input::placeholder { color: var(--text-tertiary); }
+    .btn-save {
+      padding: 9px 20px; background: var(--green); color: white;
+      border: none; border-radius: var(--radius-sm); font-family: inherit;
+      font-size: 13px; font-weight: 600; cursor: pointer; transition: background 0.15s;
+      display: flex; align-items: center; gap: 6px; white-space: nowrap;
+    }
+    .btn-save:hover { background: #a94b15; }
+    .save-status { font-size: 12px; color: var(--text-tertiary); white-space: nowrap; }
+
+    .main-content { flex: 1; overflow-y: auto; padding: 1.5rem; }
+    .main-content::-webkit-scrollbar { width: 6px; }
+    .main-content::-webkit-scrollbar-track { background: transparent; }
+    .main-content::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
+
+    /* ---- EMPTY STATE ---- */
+    .empty-state {
+      height: 100%; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 12px;
+    }
+    .empty-icon { font-size: 48px; opacity: 0.3; }
+    .empty-state h2 { font-size: 16px; font-weight: 600; color: var(--text-secondary); }
+    .empty-state p { font-size: 13px; color: var(--text-tertiary); }
+
+    /* ---- SECTIONS ---- */
+    .section { background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.25rem; margin-bottom: 1rem; }
+    .section-title { font-size: 13px; font-weight: 700; color: var(--text-primary); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 1rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border); }
+
+    /* ---- COST FORM ---- */
+    .cost-group { margin-bottom: 1rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border); }
+    .cost-group:last-of-type { border-bottom: none; margin-bottom: 0; }
+    .cost-group-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+    .cost-group-label { font-size: 12px; font-weight: 600; color: var(--text-secondary); }
+    .cost-calc { font-size: 13px; font-weight: 600; color: var(--green-text); background: var(--green-light); padding: 2px 8px; border-radius: 20px; }
+
+    .fields-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; }
+    .field-group { display: flex; flex-direction: column; gap: 4px; }
+    .field-group label { font-size: 11px; font-weight: 500; color: var(--text-secondary); }
+    .field-group input, .field-group select {
+      padding: 8px 10px; border: 1.5px solid var(--border); border-radius: var(--radius-sm);
+      font-family: inherit; font-size: 13px; outline: none; transition: border-color 0.15s;
+      background: white; color: var(--text-primary); width: 100%;
+    }
+    .field-group input:focus, .field-group select:focus { border-color: var(--green); }
+
+    /* Accessories */
+    .accessory-row { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+    .accessory-row input { flex: 1; }
+    .accessory-row input.acc-cost { max-width: 100px; }
+    .btn-icon {
+      width: 30px; height: 30px; border-radius: var(--radius-sm); border: 1.5px solid var(--border);
+      background: white; cursor: pointer; display: flex; align-items: center; justify-content: center;
+      font-size: 16px; transition: all 0.12s; flex-shrink: 0; color: var(--text-secondary);
+    }
+    .btn-icon:hover { background: var(--red-light); border-color: var(--red); color: var(--red); }
+    .btn-add-acc {
+      display: flex; align-items: center; gap: 5px; padding: 6px 10px;
+      background: transparent; border: 1.5px dashed var(--border); border-radius: var(--radius-sm);
+      color: var(--text-tertiary); font-family: inherit; font-size: 12px; cursor: pointer;
+      transition: all 0.12s; width: 100%;
+    }
+    .btn-add-acc:hover { border-color: var(--green); color: var(--green-text); background: var(--green-light); }
+
+    /* Total bar */
+    .total-cost-bar {
+      display: flex; align-items: center; justify-content: space-between;
+      background: #111827; border-radius: var(--radius-sm); padding: 12px 16px; margin-top: 1rem;
+    }
+    .total-cost-bar span:first-child { font-size: 13px; font-weight: 600; color: #9ca3af; }
+    .total-cost-bar span:last-child { font-size: 18px; font-weight: 700; color: var(--green); }
+
+    /* ---- QTY CARDS ---- */
+    .qty-cards-grid { display: flex; flex-direction: column; gap: 12px; }
+    .qty-card { background: white; border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem; }
+
+    .qty-card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; gap: 8px; flex-wrap: wrap; }
+    .qty-label-wrap { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; }
+    .qty-label-input {
+      font-family: inherit; font-size: 13px; font-weight: 600; color: var(--text-primary);
+      border: none; border-bottom: 1.5px solid transparent; outline: none; background: transparent;
+      transition: border-color 0.15s; min-width: 0; width: 140px;
+    }
+    .qty-label-input:hover { border-bottom-color: var(--border); }
+    .qty-label-input:focus { border-bottom-color: var(--green); }
+    .qty-number-badge {
+      display: flex; align-items: center; gap: 4px;
+      background: #dbeafe; color: #1d4ed8; padding: 2px 8px;
+      border-radius: 20px; font-size: 11px; font-weight: 600;
+    }
+    .qty-number-input {
+      font-family: inherit; font-size: 11px; font-weight: 700; color: #1d4ed8;
+      border: none; outline: none; background: transparent; width: 24px; text-align: center;
+    }
+
+    .price-wrap { display: flex; align-items: center; gap: 4px; }
+    .price-prefix { font-size: 16px; font-weight: 600; color: var(--green-text); }
+    .price-main-input {
+      font-size: 24px; font-weight: 700; color: var(--green-text);
+      border: none; border-bottom: 2px solid #e8a784; background: transparent;
+      outline: none; width: 110px; text-align: right; font-family: inherit;
+      transition: border-color 0.15s;
+    }
+    .price-main-input:focus { border-bottom-color: var(--green); }
+
+    .anuncio-box {
+      display: flex; align-items: center; justify-content: space-between;
+      background: var(--amber-light); border-radius: var(--radius-sm);
+      padding: 10px 12px; margin-bottom: 10px; gap: 8px; flex-wrap: wrap;
+    }
+    .anuncio-left { flex: 1; }
+    .anuncio-label { font-size: 11px; font-weight: 600; color: var(--amber-text); }
+    .anuncio-sub { font-size: 10px; color: #b45309; opacity: 0.8; }
+    .anuncio-price { font-size: 18px; font-weight: 700; color: var(--amber-text); white-space: nowrap; }
+    .off-pill {
+      background: var(--red); color: white; font-size: 11px; font-weight: 600;
+      padding: 3px 8px; border-radius: 20px; white-space: nowrap;
+    }
+
+    .qty-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 10px; }
+    .qty-stat { background: #f9fafb; border-radius: var(--radius-sm); padding: 7px 10px; }
+    .qty-stat-label { font-size: 10px; color: var(--text-tertiary); margin-bottom: 2px; }
+    .qty-stat-value { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+    .qty-stat-value.profit { color: var(--blue-text); }
+
+    .margin-row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+    .margin-label { font-size: 12px; color: var(--text-secondary); white-space: nowrap; }
+    .margin-row input[type=range] { flex: 1; accent-color: var(--green); }
+    .margin-display { font-size: 13px; font-weight: 600; min-width: 52px; text-align: right; color: var(--text-primary); }
+
+    .comp-section { border-top: 1px solid var(--border); padding-top: 10px; }
+    .comp-title { font-size: 11px; color: var(--text-tertiary); margin-bottom: 8px; }
+    .comp-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+    .comp-col { display: flex; flex-direction: column; gap: 3px; }
+    .comp-col label { font-size: 10px; color: var(--text-tertiary); }
+    .comp-col input { padding: 7px 8px; border: 1.5px solid var(--border); border-radius: var(--radius-sm); font-family: inherit; font-size: 12px; outline: none; transition: border-color 0.15s; }
+    .comp-col input:focus { border-color: var(--green); }
+    .comp-tag { display: inline-block; font-size: 10px; padding: 1px 6px; border-radius: 20px; margin-top: 2px; min-height: 16px; }
+    .tag-cheaper { background: var(--red-light); color: var(--red-text); }
+    .tag-pricier { background: var(--green-light); color: var(--green-text); }
+    .tag-same { background: #fef3c7; color: #92400e; }
+
+    /* ---- LOADING ---- */
+    .loading-overlay {
+      position: fixed; inset: 0; background: rgba(255,255,255,0.8);
+      display: none; align-items: center; justify-content: center; z-index: 50;
+    }
+    .loading-overlay.visible { display: flex; }
+    .spinner {
+      width: 36px; height: 36px; border: 3px solid var(--border);
+      border-top-color: var(--green); border-radius: 50%; animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ---- TOAST ---- */
+    .toast {
+      position: fixed; bottom: 24px; right: 24px;
+      background: #111827; color: white; padding: 10px 18px;
+      border-radius: var(--radius-sm); font-size: 13px; font-weight: 500;
+      transform: translateY(20px); opacity: 0; transition: all 0.25s; z-index: 300;
+    }
+    .toast.show { transform: translateY(0); opacity: 1; }
+    .toast.success { background: var(--green); }
+    .toast.error { background: var(--red); }
+  </style>
+</head>
+<body>
+
+<!-- LOGIN SCREEN -->
+<div id="login-screen">
+  <div class="login-card">
+    <div class="login-logo" style="font-family: 'Times New Roman', Times, serif; font-size: 28px; font-weight: bold; color: white;">
+      Z
+    </div>
+    <h1>Calculadora de Preços</h1>
+    <p>Acesse com sua conta da empresa</p>
+    <div class="field-label">E-mail</div>
+    <input id="login-email" class="field-input" type="email" placeholder="seu@email.com" autocomplete="email">
+    <div class="field-label">Senha</div>
+    <input id="login-password" class="field-input" type="password" placeholder="••••••••" autocomplete="current-password">
+    <button class="btn-primary" onclick="doLogin()">Entrar</button>
+    <div class="login-error" id="login-error"></div>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app">
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <div class="sidebar-logo">
+        <div class="sidebar-logo-icon" style="font-family: 'Times New Roman', Times, serif; font-size: 20px; font-weight: bold; color: white;">
+          Z
+        </div>
+        <div>
+          <div>Zion</div>
+          <span>Calculadora</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <button class="btn-new-product" onclick="newProduct()">
+        <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="M19 11h-6V5h-2v6H5v2h6v6h2v-6h6z"/></svg>
+        Novo Produto
+      </button>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Produtos</div>
+    </div>
+    <div class="product-list" id="product-list">
+      <div style="padding: 8px 10px; font-size: 12px; color: #4b5563;">Carregando...</div>
+    </div>
+
+    <div class="sidebar-footer">
+      <div class="user-info">
+        <div class="user-avatar" id="user-avatar">?</div>
+        <div class="user-email" id="user-email"></div>
+        <button class="btn-logout" onclick="doLogout()">Sair</button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <div class="main">
+    <div class="main-header" id="main-header" style="display:none;">
+      <input class="product-title-input" id="product-title" placeholder="Nome do produto..." oninput="onTitleChange()">
+      <span class="save-status" id="save-status"></span>
+      <button class="btn-save" onclick="saveProduct()">
+        <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="M17 3H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V7l-4-4zm-5 16a3 3 0 110-6 3 3 0 010 6zm3-10H5V5h10v4z"/></svg>
+        Salvar
+      </button>
+    </div>
+    <div class="main-content" id="main-content">
+      <div class="empty-state">
+        <div class="empty-icon">📦</div>
+        <h2>Nenhum produto selecionado</h2>
+        <p>Crie um novo produto ou selecione um existente</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SETUP WARNING -->
+<div id="setup-warning">
+  <div class="setup-card">
+    <h2>⚙️ Configure o Firebase</h2>
+    <p>Para usar o app, você precisa criar um projeto Firebase gratuito e colar a configuração no arquivo <strong>index.html</strong>. Siga os passos:</p>
+    <ol>
+      <li>Acesse <strong>console.firebase.google.com</strong></li>
+      <li>Crie um projeto e ative <strong>Firestore</strong> e <strong>Authentication (e-mail/senha)</strong></li>
+      <li>Em Autenticação, adicione as contas dos 2 usuários</li>
+      <li>Nas configurações do projeto, copie o <strong>firebaseConfig</strong></li>
+      <li>Cole no lugar indicado no início do &lt;script&gt; neste arquivo</li>
+    </ol>
+    <br>
+    <p>Regras do Firestore (cole em <strong>Firestore → Regras</strong>):</p>
+    <code>rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{userId}/{document=**} {
+      allow read, write: if request.auth != null
+        && request.auth.uid == userId;
+    }
+  }
+}</code>
+    <button class="btn-primary" onclick="document.getElementById('setup-warning').classList.remove('visible')">Entendi</button>
+  </div>
+</div>
+
+<!-- LOADING -->
+<div class="loading-overlay" id="loading">
+  <div class="spinner"></div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ============================================================
+//  CONFIGURAÇÃO FIREBASE — SUBSTITUA PELOS SEUS DADOS
+// ============================================================
+const firebaseConfig = {
+  apiKey: "AIzaSyA4wto-AwZRiU2acXzBr827oWdQgIRddRY",
+  authDomain: "zion-calculadora.firebaseapp.com",
+  projectId: "zion-calculadora",
+  storageBucket: "zion-calculadora.firebasestorage.app",
+  messagingSenderId: "148634714697",
+  appId: "G-T3VRKEP6RX"
+};
+// ============================================================
+
+const NEEDS_SETUP = firebaseConfig.apiKey === "YOUR_API_KEY";
+
+if (!NEEDS_SETUP) {
+  firebase.initializeApp(firebaseConfig);
+}
+
+const auth = NEEDS_SETUP ? null : firebase.auth();
+const db   = NEEDS_SETUP ? null : firebase.firestore();
+
+// ---- CONSTANTS ----
+const FEE_PCT   = 0.25; // 20% comissão + 5% simples
+const FEE_FIXED = 4.00;
+const ANUNCIO_BASE = 0.15;
+const ANUNCIO_STEP = 0.05;
+
+// ---- STATE ----
+let currentProduct = null;
+let products = [];
+let currentUser = null;
+let saveTimeout = null;
+
+// ---- DEFAULT PRODUCT ----
+function defaultProduct(title = 'Novo Produto') {
+  return {
+    id: null,
+    title,
+    filamentType: 'PLA',
+    filamentPriceKg: 0,
+    filamentGrams: 0,
+    tapeRollPrice: 170,
+    tapeRollM: 33,
+    tapeCmUnit: 6,
+    accessories: [],
+    packagingCost: 0.30,
+    adsCost: 0,
+    quantities: [
+      { label: '1 unidade',   qty: 1, margin: 20, comps: ['','',''] },
+      { label: '2 unidades',  qty: 2, margin: 20, comps: ['','',''] },
+      { label: '3 unidades',  qty: 3, margin: 20, comps: ['','',''] },
+      { label: '4 unidades',  qty: 4, margin: 20, comps: ['','',''] },
+      { label: '5 unidades',  qty: 5, margin: 20, comps: ['','',''] },
+    ]
+  };
+}
+
+// ---- CALCULATOR ----
+function calcCostPerUnit(p) {
+  const filament = (p.filamentPriceKg / 1000) * p.filamentGrams;
+  const tape     = p.tapeRollM > 0 ? (p.tapeRollPrice / (p.tapeRollM * 100)) * p.tapeCmUnit : 0;
+  const acc      = (p.accessories || []).reduce((s, a) => s + (parseFloat(a.cost) || 0), 0);
+  return filament + tape + acc + (parseFloat(p.packagingCost) || 0) + (parseFloat(p.adsCost) || 0);
+}
+
+function priceFromMargin(totalCost, margin) {
+  const d = 1 - FEE_PCT - margin / 100;
+  if (d <= 0) return 0;
+  return (totalCost + FEE_FIXED) / d;
+}
+
+function marginFromPrice(totalCost, price) {
+  if (price <= 0) return 0;
+  const fees   = price * FEE_PCT + FEE_FIXED;
+  const profit = price - fees - totalCost;
+  return (profit / price) * 100;
+}
+
+function calcFromPrice(totalCost, price) {
+  const fees   = price * FEE_PCT + FEE_FIXED;
+  const profit = price - fees - totalCost;
+  return { fees, profit, margin: (profit / price) * 100 };
+}
+
+function anuncioPct(idx) { return ANUNCIO_BASE + idx * ANUNCIO_STEP; }
+
+// ---- FORMAT ----
+function fmt(v)      { return 'R$ ' + (isNaN(v) ? '0,00' : v.toFixed(2).replace('.',',')); }
+function fmtIn(v)    { return (isNaN(v) ? '0,00' : v.toFixed(2).replace('.',',')); }
+function fmtPct(v)   { return '+' + Math.round(v * 100) + '%'; }
+function parseBR(s)  { return parseFloat((s || '').toString().replace(',','.')) || 0; }
+
+// ---- COMP TAG ----
+function compTag(myPrice, compStr) {
+  const cv = parseBR(compStr);
+  if (!cv) return '';
+  const d = ((myPrice - cv) / cv * 100).toFixed(0);
+  if (myPrice < cv) return `<span class="comp-tag tag-pricier">Você ${Math.abs(d)}% mais barato</span>`;
+  if (myPrice > cv) return `<span class="comp-tag tag-cheaper">Você ${Math.abs(d)}% mais caro</span>`;
+  return `<span class="comp-tag tag-same">Igual</span>`;
+}
+
+// ---- AUTH ----
+function doLogin() {
+  if (NEEDS_SETUP) {
+    document.getElementById('setup-warning').classList.add('visible');
+    return;
+  }
+  const email = document.getElementById('login-email').value.trim();
+  const pass  = document.getElementById('login-password').value;
+  document.getElementById('login-error').textContent = '';
+  setLoading(true);
+  auth.signInWithEmailAndPassword(email, pass)
+    .catch(e => {
+      document.getElementById('login-error').textContent = 'E-mail ou senha incorretos.';
+      setLoading(false);
+    });
+}
+
+function doLogout() {
+  auth.signOut();
+}
+
+// ---- PRODUCTS CRUD ----
+function productsRef() {
+  return db.collection('users').doc(currentUser.uid).collection('products');
+}
+
+async function loadProducts() {
+  if (!currentUser) return;
+  const snap = await productsRef().orderBy('updatedAt','desc').get();
+  products = snap.docs.map(d => ({ ...d.data(), id: d.id }));
+  renderProductList();
+}
+
+async function saveProduct() {
+  if (!currentProduct) return;
+  readFormIntoProduct();
+  setStatus('Salvando...');
+  try {
+    const data = { ...currentProduct, updatedAt: firebase.firestore.FieldValue.serverTimestamp() };
+    delete data.id;
+    if (currentProduct.id) {
+      await productsRef().doc(currentProduct.id).set(data);
+    } else {
+      const ref = await productsRef().add(data);
+      currentProduct.id = ref.id;
+    }
+    const existing = products.find(p => p.id === currentProduct.id);
+    if (existing) Object.assign(existing, currentProduct);
+    else products.unshift({ ...currentProduct });
+    renderProductList();
+    setStatus('Salvo ✓');
+    showToast('Produto salvo!', 'success');
+    setTimeout(() => setStatus(''), 3000);
+  } catch(e) {
+    showToast('Erro ao salvar.', 'error');
+    setStatus('');
+  }
+}
+
+async function deleteProduct(id, e) {
+  e.stopPropagation();
+  if (!confirm('Excluir este produto?')) return;
+  await productsRef().doc(id).delete();
+  products = products.filter(p => p.id !== id);
+  if (currentProduct && currentProduct.id === id) {
+    currentProduct = null;
+    showEmptyState();
+  }
+  renderProductList();
+  showToast('Produto excluído.');
+}
+
+// ---- UI: PRODUCT LIST ----
+function renderProductList() {
+  const el = document.getElementById('product-list');
+  if (!products.length) {
+    el.innerHTML = `<div style="padding: 8px 10px; font-size: 12px; color: #4b5563;">Nenhum produto ainda</div>`;
+    return;
+  }
+  el.innerHTML = products.map(p => `
+    <div class="product-item ${currentProduct && currentProduct.id === p.id ? 'active' : ''}"
+         onclick="openProduct('${p.id}')">
+      <span class="product-item-name">${p.title || 'Sem nome'}</span>
+      <button class="product-delete" onclick="deleteProduct('${p.id}', event)" title="Excluir">×</button>
+    </div>
+  `).join('');
+}
+
+function newProduct() {
+  currentProduct = defaultProduct();
+  renderEditor();
+}
+
+function openProduct(id) {
+  currentProduct = JSON.parse(JSON.stringify(products.find(p => p.id === id)));
+  renderEditor();
+}
+
+// ---- UI: EDITOR ----
+function showEmptyState() {
+  document.getElementById('main-header').style.display = 'none';
+  document.getElementById('main-content').innerHTML = `
+    <div class="empty-state">
+      <div class="empty-icon">📦</div>
+      <h2>Nenhum produto selecionado</h2>
+      <p>Crie um novo produto ou selecione um existente</p>
+    </div>`;
+}
+
+function renderEditor() {
+  if (!currentProduct) return;
+  document.getElementById('main-header').style.display = 'flex';
+  document.getElementById('product-title').value = currentProduct.title || '';
+  setStatus('');
+  renderProductList();
+  renderCostSection();
+  renderQtySection();
+}
+
+function renderCostSection() {
+  const p = currentProduct;
+  const cpu = calcCostPerUnit(p);
+  const filCost = ((p.filamentPriceKg / 1000) * p.filamentGrams);
+  const tapCost = p.tapeRollM > 0 ? (p.tapeRollPrice / (p.tapeRollM * 100)) * p.tapeCmUnit : 0;
+
+  const accHTML = (p.accessories || []).map((a, i) => `
+    <div class="accessory-row" data-acc="${i}">
+      <input type="text" class="field-input" style="flex:1;padding:7px 10px;margin:0;" placeholder="Ex: Parafuso M3" value="${a.name || ''}" oninput="onAccName(${i}, this.value)">
+      <input type="number" class="field-input acc-cost" style="margin:0;padding:7px 10px;" placeholder="R$" step="0.01" value="${a.cost || ''}" oninput="onAccCost(${i}, this.value)">
+      <button class="btn-icon" onclick="removeAcc(${i})" title="Remover">×</button>
+    </div>`).join('');
+
+  const content = document.getElementById('main-content');
+  content.innerHTML = `
+    <div class="section">
+      <div class="section-title">Custos por Unidade</div>
+
+      <div class="cost-group">
+        <div class="cost-group-header">
+          <span class="cost-group-label">🧵 Filamento</span>
+          <span class="cost-calc" id="fil-cost">${fmt(filCost)}</span>
+        </div>
+        <div class="fields-row">
+          <div class="field-group">
+            <label>Tipo</label>
+            <select id="fil-type" onchange="onFilType(this.value)">
+              <option ${p.filamentType==='PLA'?'selected':''}>PLA</option>
+              <option ${p.filamentType==='PETG'?'selected':''}>PETG</option>
+              <option ${p.filamentType==='ABS'?'selected':''}>ABS</option>
+            </select>
+          </div>
+          <div class="field-group">
+            <label>Preço por kg (R$)</label>
+            <input type="number" id="fil-price-kg" step="0.01" value="${p.filamentPriceKg || ''}" placeholder="0,00" oninput="onFilPrice(this.value)">
+          </div>
+          <div class="field-group">
+            <label>Gramas usadas (g)</label>
+            <input type="number" id="fil-grams" step="0.1" value="${p.filamentGrams || ''}" placeholder="0" oninput="onFilGrams(this.value)">
+          </div>
+        </div>
+      </div>
+
+      <div class="cost-group">
+        <div class="cost-group-header">
+          <span class="cost-group-label">📏 Fita Dupla Face</span>
+          <span class="cost-calc" id="tape-cost">${fmt(tapCost)}</span>
+        </div>
+        <div class="fields-row">
+          <div class="field-group">
+            <label>Preço do rolo (R$)</label>
+            <input type="number" id="tape-roll-price" step="0.01" value="${p.tapeRollPrice}" oninput="onTape()">
+          </div>
+          <div class="field-group">
+            <label>Comprimento do rolo (m)</label>
+            <input type="number" id="tape-roll-m" step="0.1" value="${p.tapeRollM}" oninput="onTape()">
+          </div>
+          <div class="field-group">
+            <label>Uso por unidade (cm)</label>
+            <input type="number" id="tape-cm-unit" step="0.5" value="${p.tapeCmUnit}" oninput="onTape()">
+          </div>
+        </div>
+      </div>
+
+      <div class="cost-group">
+        <div class="cost-group-header">
+          <span class="cost-group-label">🔩 Acessórios / Parafusos</span>
+        </div>
+        <div id="acc-list">${accHTML}</div>
+        <button class="btn-add-acc" onclick="addAcc()">+ Adicionar acessório</button>
+      </div>
+
+      <div class="cost-group" style="border-bottom:none;padding-bottom:0;">
+        <div class="fields-row">
+          <div class="field-group">
+            <label>📦 Embalagem (R$)</label>
+            <input type="number" id="packaging" step="0.01" value="${p.packagingCost}" oninput="onPackaging(this.value)">
+          </div>
+          <div class="field-group">
+            <label>📢 Ads por unidade (R$)</label>
+            <input type="number" id="ads-cost" step="0.01" value="${p.adsCost}" oninput="onAds(this.value)">
+          </div>
+        </div>
+      </div>
+
+      <div class="total-cost-bar">
+        <span>Custo total por unidade</span>
+        <span id="total-cpu">${fmt(cpu)}</span>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Precificação por Quantidade</div>
+      <div class="qty-cards-grid" id="qty-cards"></div>
+    </div>`;
+
+  renderAllQtyCards();
+}
+
+// ---- QTY CARDS ----
+function renderAllQtyCards() {
+  const container = document.getElementById('qty-cards');
+  if (!container) return;
+  container.innerHTML = '';
+  currentProduct.quantities.forEach((q, i) => {
+    container.appendChild(buildQtyCard(i));
+  });
+}
+
+function buildQtyCard(idx) {
+  const q    = currentProduct.quantities[idx];
+  const cpu  = calcCostPerUnit(currentProduct);
+  const tc   = cpu * q.qty;
+  const price = priceFromMargin(tc, q.margin);
+  const { fees, profit } = calcFromPrice(tc, price);
+  const pct  = anuncioPct(idx);
+  const anuncio = price * (1 + pct);
+
+  const div = document.createElement('div');
+  div.className = 'qty-card';
+  div.id = `qcard-${idx}`;
+  div.innerHTML = `
+    <div class="qty-card-header">
+      <div class="qty-label-wrap">
+        <input class="qty-label-input" value="${q.label}" placeholder="Nome..." oninput="onQtyLabel(${idx}, this.value)" title="Clique para renomear">
+        <div class="qty-number-badge">×<input class="qty-number-input" type="number" min="1" value="${q.qty}" oninput="onQtyNum(${idx}, this.value)" title="Quantidade"></div>
+      </div>
+      <div class="price-wrap">
+        <span class="price-prefix">R$</span>
+        <input class="price-main-input" id="price-in-${idx}" value="${fmtIn(price)}"
+          onfocus="this.value=this.value.replace(',','.')"
+          onblur="onPriceBlur(${idx}, this.value)"
+          onkeydown="if(event.key==='Enter')this.blur()">
+      </div>
+    </div>
+
+    <div class="anuncio-box">
+      <div class="anuncio-left">
+        <div class="anuncio-label">Valor do anúncio cadastrado</div>
+        <div class="anuncio-sub">Preço final ${fmtPct(pct)} sobre o valor de venda</div>
+      </div>
+      <div class="anuncio-price" id="anuncio-${idx}">${fmt(anuncio)}</div>
+      <span class="off-pill" id="off-pill-${idx}">${Math.round(pct*100)}% off</span>
+    </div>
+
+    <div class="qty-stats">
+      <div class="qty-stat">
+        <div class="qty-stat-label">Custo total</div>
+        <div class="qty-stat-value" id="stat-tc-${idx}">${fmt(tc)}</div>
+      </div>
+      <div class="qty-stat">
+        <div class="qty-stat-label">Taxas Shopee</div>
+        <div class="qty-stat-value" id="stat-fees-${idx}">${fmt(fees)}</div>
+      </div>
+      <div class="qty-stat">
+        <div class="qty-stat-label">Lucro líquido</div>
+        <div class="qty-stat-value profit" id="stat-profit-${idx}">${fmt(profit)}</div>
+      </div>
+    </div>
+
+    <div class="margin-row">
+      <span class="margin-label">Margem</span>
+      <input type="range" min="1" max="60" step="0.01" value="${q.margin.toFixed(2)}" id="sl-${idx}" oninput="onMarginSlider(${idx}, this.value)">
+      <span class="margin-display" id="margin-display-${idx}">${q.margin.toFixed(2)}%</span>
+    </div>
+
+    <div class="comp-section">
+      <div class="comp-title">Preços dos 3 melhores concorrentes</div>
+      <div class="comp-grid">
+        ${[0,1,2].map(ci => `
+          <div class="comp-col">
+            <label>Concorrente ${ci+1}</label>
+            <input type="text" inputmode="decimal" placeholder="R$ 0,00" value="${q.comps[ci]||''}" oninput="onComp(${idx},${ci},this.value)">
+            <span id="ctag-${idx}-${ci}">${compTag(price, q.comps[ci])}</span>
+          </div>`).join('')}
+      </div>
+    </div>`;
+  return div;
+}
+
+function updateQtyCard(idx) {
+  const q    = currentProduct.quantities[idx];
+  const cpu  = calcCostPerUnit(currentProduct);
+  const tc   = cpu * q.qty;
+  const price = priceFromMargin(tc, q.margin);
+  const { fees, profit } = calcFromPrice(tc, price);
+  const pct  = anuncioPct(idx);
+  const anuncio = price * (1 + pct);
+
+  el('price-in-'+idx).value = fmtIn(price);
+  el('anuncio-'+idx).textContent = fmt(anuncio);
+  el('off-pill-'+idx).textContent = Math.round(pct*100) + '% off';
+  el('stat-tc-'+idx).textContent = fmt(tc);
+  el('stat-fees-'+idx).textContent = fmt(fees);
+  el('stat-profit-'+idx).textContent = fmt(profit);
+  el('sl-'+idx).value = q.margin.toFixed(2);
+  el('margin-display-'+idx).textContent = q.margin.toFixed(2) + '%';
+  [0,1,2].forEach(ci => {
+    el(`ctag-${idx}-${ci}`).innerHTML = compTag(price, q.comps[ci]);
+  });
+}
+
+function updateAllQtyCards() {
+  const cpu = calcCostPerUnit(currentProduct);
+  el('total-cpu').textContent = fmt(cpu);
+  currentProduct.quantities.forEach((_, i) => updateQtyCard(i));
+}
+
+function updateCostCalcs() {
+  const p = currentProduct;
+  const filCost = ((p.filamentPriceKg / 1000) * p.filamentGrams);
+  const tapCost = p.tapeRollM > 0 ? (p.tapeRollPrice / (p.tapeRollM * 100)) * p.tapeCmUnit : 0;
+  if (el('fil-cost'))  el('fil-cost').textContent  = fmt(filCost);
+  if (el('tape-cost')) el('tape-cost').textContent = fmt(tapCost);
+  updateAllQtyCards();
+}
+
+// ---- EVENT HANDLERS: COSTS ----
+function onFilType(v)    { currentProduct.filamentType = v; }
+function onFilPrice(v)   { currentProduct.filamentPriceKg = parseBR(v); updateCostCalcs(); }
+function onFilGrams(v)   { currentProduct.filamentGrams = parseBR(v); updateCostCalcs(); }
+function onTape()        {
+  currentProduct.tapeRollPrice = parseBR(el('tape-roll-price').value);
+  currentProduct.tapeRollM     = parseBR(el('tape-roll-m').value);
+  currentProduct.tapeCmUnit    = parseBR(el('tape-cm-unit').value);
+  updateCostCalcs();
+}
+function onPackaging(v)  { currentProduct.packagingCost = parseBR(v); updateCostCalcs(); }
+function onAds(v)        { currentProduct.adsCost = parseBR(v); updateCostCalcs(); }
+
+function addAcc() {
+  currentProduct.accessories.push({ name: '', cost: 0 });
+  const container = el('acc-list');
+  const idx = currentProduct.accessories.length - 1;
+  const div = document.createElement('div');
+  div.className = 'accessory-row';
+  div.dataset.acc = idx;
+  div.innerHTML = `
+    <input type="text" class="field-input" style="flex:1;padding:7px 10px;margin:0;" placeholder="Ex: Parafuso M3" oninput="onAccName(${idx}, this.value)">
+    <input type="number" class="field-input acc-cost" style="margin:0;padding:7px 10px;" placeholder="R$" step="0.01" oninput="onAccCost(${idx}, this.value)">
+    <button class="btn-icon" onclick="removeAcc(${idx})" title="Remover">×</button>`;
+  container.appendChild(div);
+}
+function onAccName(i, v) { if (currentProduct.accessories[i]) { currentProduct.accessories[i].name = v; } }
+function onAccCost(i, v) { if (currentProduct.accessories[i]) { currentProduct.accessories[i].cost = parseBR(v); updateCostCalcs(); } }
+function removeAcc(i) {
+  currentProduct.accessories.splice(i, 1);
+  renderCostSection();
+  renderAllQtyCards();
+}
+
+// ---- EVENT HANDLERS: QTY ----
+function onQtyLabel(idx, v) { currentProduct.quantities[idx].label = v; }
+function onQtyNum(idx, v)   { currentProduct.quantities[idx].qty = parseInt(v) || 1; updateQtyCard(idx); }
+
+function onMarginSlider(idx, v) {
+  const margin = parseFloat(v);
+  currentProduct.quantities[idx].margin = margin;
+  updateQtyCard(idx);
+}
+
+function onPriceBlur(idx, raw) {
+  const price = parseBR(raw);
+  const cpu   = calcCostPerUnit(currentProduct);
+  const tc    = cpu * currentProduct.quantities[idx].qty;
+  if (price <= 0) { updateQtyCard(idx); return; }
+  const margin = Math.min(60, Math.max(1, marginFromPrice(tc, price)));
+  currentProduct.quantities[idx].margin = margin;
+  updateQtyCard(idx);
+}
+
+function onComp(idx, ci, v) {
+  currentProduct.quantities[idx].comps[ci] = v;
+  const cpu   = calcCostPerUnit(currentProduct);
+  const tc    = cpu * currentProduct.quantities[idx].qty;
+  const price = priceFromMargin(tc, currentProduct.quantities[idx].margin);
+  el(`ctag-${idx}-${ci}`).innerHTML = compTag(price, v);
+}
+
+function onTitleChange() {
+  if (currentProduct) currentProduct.title = el('product-title').value;
+}
+
+// ---- READ FORM ----
+function readFormIntoProduct() {
+  currentProduct.title = el('product-title').value;
+  if (el('fil-type'))        currentProduct.filamentType    = el('fil-type').value;
+  if (el('fil-price-kg'))    currentProduct.filamentPriceKg = parseBR(el('fil-price-kg').value);
+  if (el('fil-grams'))       currentProduct.filamentGrams   = parseBR(el('fil-grams').value);
+  if (el('tape-roll-price')) currentProduct.tapeRollPrice   = parseBR(el('tape-roll-price').value);
+  if (el('tape-roll-m'))     currentProduct.tapeRollM       = parseBR(el('tape-roll-m').value);
+  if (el('tape-cm-unit'))    currentProduct.tapeCmUnit      = parseBR(el('tape-cm-unit').value);
+  if (el('packaging'))       currentProduct.packagingCost   = parseBR(el('packaging').value);
+  if (el('ads-cost'))        currentProduct.adsCost         = parseBR(el('ads-cost').value);
+}
+
+// ---- HELPERS ----
+function el(id) { return document.getElementById(id); }
+function setStatus(msg) { el('save-status').textContent = msg; }
+function setLoading(v)  { el('loading').classList.toggle('visible', v); }
+
+function showToast(msg, type = '') {
+  const t = el('toast');
+  t.textContent = msg;
+  t.className = `toast show ${type}`;
+  setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+function renderQtySection() {}
+
+// ---- AUTH LISTENER ----
+if (!NEEDS_SETUP) {
+  auth.onAuthStateChanged(user => {
+    setLoading(false);
+    if (user) {
+      currentUser = user;
+      el('login-screen').style.display = 'none';
+      el('app').classList.add('visible');
+      el('user-email').textContent = user.email;
+      el('user-avatar').textContent = user.email[0].toUpperCase();
+      loadProducts();
+    } else {
+      currentUser = null;
+      el('login-screen').style.display = 'flex';
+      el('app').classList.remove('visible');
+    }
+  });
+} else {
+  setLoading(false);
+  el('login-screen').addEventListener('click', () => {
+    if (firebaseConfig.apiKey === 'YOUR_API_KEY') {
+      document.getElementById('setup-warning').classList.add('visible');
+    }
+  });
+}
+
+// enter to submit login
+document.getElementById('login-password').addEventListener('keydown', e => {
+  if (e.key === 'Enter') doLogin();
+});
+</script>
+</body>
+</html>
