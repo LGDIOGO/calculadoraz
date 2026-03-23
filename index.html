@@ -358,7 +358,7 @@
 
     /* ---- TOAST ---- */
     .toast {
-      position: fixed; bottom: 24px; right: 24px;
+      position: fixed; bottom: 84px; right: 24px;
       background: #111827; color: white; padding: 10px 18px;
       border-radius: var(--radius-sm); font-size: 13px; font-weight: 500;
       transform: translateY(20px); opacity: 0; transition: all 0.25s; z-index: 300;
@@ -366,6 +366,19 @@
     .toast.show { transform: translateY(0); opacity: 1; }
     .toast.success { background: var(--green); }
     .toast.error { background: var(--red); }
+
+    /* ---- FAB SAVE ---- */
+    .btn-fab-save {
+      position: fixed; bottom: 24px; right: 24px;
+      background: var(--green); color: white;
+      padding: 12px 20px; border-radius: 30px;
+      border: none; cursor: pointer; display: flex; align-items: center; gap: 8px;
+      font-family: inherit; font-size: 14px; font-weight: 700;
+      box-shadow: 0 4px 12px rgba(199, 90, 27, 0.4);
+      transition: transform 0.2s, background 0.2s; z-index: 90;
+    }
+    .btn-fab-save:hover { transform: translateY(-2px); background: #a94b15; }
+    .btn-fab-save.hidden { display: none; }
   </style>
 </head>
 <body>
@@ -489,6 +502,12 @@ service cloud.firestore {
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
 
+<!-- FAB SAVE -->
+<button class="btn-fab-save hidden" id="fab-save" onclick="saveProduct()" title="Salvar Alterações">
+  <svg width="24" height="24" fill="currentColor" viewBox="0 0 24 24"><path d="M17 3H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V7l-4-4zm-5 16a3 3 0 110-6 3 3 0 010 6zm3-10H5V5h10v4z"/></svg>
+  <span id="fab-save-status">Salvar Produto</span>
+</button>
+
 <script>
 // ============================================================
 //  CONFIGURAÇÃO FIREBASE — SUBSTITUA PELOS SEUS DADOS
@@ -531,6 +550,7 @@ function defaultProduct(title = 'Novo Produto') {
     id: null,
     title,
     availableColors: '',
+    selectedColors: [],
     maxQuantities: 5,
     filamentType: '',
     filamentPriceKg: 0,
@@ -632,8 +652,10 @@ function settingsRef() { return db.collection('users').doc(currentUser.uid).coll
 async function loadSettings() {
   if (!currentUser) return;
   const doc = await settingsRef().get();
-  if (doc.exists) currentUserSettings = doc.data() || { materials: [] };
+  if (doc.exists) currentUserSettings = doc.data() || { materials: [], packages: [], taxes: [] };
   if (!currentUserSettings.materials) currentUserSettings.materials = [];
+  if (!currentUserSettings.packages) currentUserSettings.packages = [];
+  if (!currentUserSettings.taxes) currentUserSettings.taxes = [];
   renderMaterialsSidebar();
 }
 
@@ -738,6 +760,26 @@ function deleteMaterial(i, e) {
   renderMaterialsSidebar();
 }
 
+function newPackage() {
+  const name = prompt('Nome da Embalagem (Ex: Caixa P 10x10x10):');
+  if (!name) return;
+  const price = prompt('Custo da Embalagem R$ (Ex: 1,50):');
+  if (!price) return;
+  currentUserSettings.packages.push({ name, price: parseBR(price) });
+  saveSettings();
+  if(currentProduct) renderCostSection();
+}
+
+function newTax() {
+  const name = prompt('Nome do Imposto (Ex: Simples Nacional):');
+  if (!name) return;
+  const pct = prompt('Porcentagem % (Ex: 6,00):');
+  if (!pct) return;
+  currentUserSettings.taxes.push({ name, pct: parseBR(pct) });
+  saveSettings();
+  if(currentProduct) renderCostSection();
+}
+
 function applyMaterial(i) {
   if (i === "") return;
   const m = currentUserSettings.materials[i];
@@ -745,6 +787,19 @@ function applyMaterial(i) {
   currentProduct.filamentPriceKg = m.price;
   updateCostCalcs();
   renderCostSection();
+}
+
+function toggleColor(name, priceKg, isChecked) {
+  if (!currentProduct.selectedColors) currentProduct.selectedColors = [];
+  if (isChecked) {
+    if (!currentProduct.selectedColors.find(c => c.name === name)) {
+      currentProduct.selectedColors.push({ name, priceKg });
+    }
+  } else {
+    currentProduct.selectedColors = currentProduct.selectedColors.filter(c => c.name !== name);
+  }
+  renderAllQtyCards();
+  updateAllQtyCards();
 }
 
 function newProduct() {
@@ -760,6 +815,7 @@ function openProduct(id) {
 // ---- UI: EDITOR ----
 function showEmptyState() {
   document.getElementById('main-header').style.display = 'none';
+  document.getElementById('fab-save').classList.add('hidden');
   document.getElementById('main-content').innerHTML = `
     <div class="empty-state">
       <div class="empty-icon">📦</div>
@@ -771,6 +827,7 @@ function showEmptyState() {
 function renderEditor() {
   if (!currentProduct) return;
   document.getElementById('main-header').style.display = 'flex';
+  document.getElementById('fab-save').classList.remove('hidden');
   document.getElementById('product-title').value = currentProduct.title || '';
   setStatus('');
   renderProductList();
@@ -780,6 +837,7 @@ function renderEditor() {
 
 function renderCostSection() {
   const p = currentProduct;
+  if (!p.selectedColors) p.selectedColors = [];
   const cpu = calcCostPerUnit(p);
   const filCost = ((p.filamentPriceKg / 1000) * p.filamentGrams) + (parseFloat(p.energyCost) || 0);
   const tapCost = (p.useTape !== false && p.tapeRollM > 0) ? (p.tapeRollPrice / (p.tapeRollM * 100)) * p.tapeCmUnit : 0;
@@ -787,9 +845,19 @@ function renderCostSection() {
   const accHTML = (p.accessories || []).map((a, i) => `
     <div class="accessory-row" data-acc="${i}">
       <input type="text" class="field-input" style="flex:1;padding:7px 10px;margin:0;" placeholder="Ex: Parafuso M3" value="${a.name || ''}" oninput="onAccName(${i}, this.value)">
-      <input type="number" class="field-input acc-cost" style="margin:0;padding:7px 10px;" placeholder="R$" step="0.01" value="${a.cost || ''}" oninput="onAccCost(${i}, this.value)">
+      <input type="text" inputmode="decimal" class="field-input acc-cost" style="margin:0;padding:7px 10px;" placeholder="R$" value="${valBR(a.cost)}" oninput="onAccCost(${i}, this.value)">
       <button class="btn-icon" onclick="removeAcc(${i})" title="Remover">×</button>
     </div>`).join('');
+
+  // COLORS GENERATOR
+  const coresSalvas = currentUserSettings?.materials || [];
+  const coresHtml = coresSalvas.length > 0 ? coresSalvas.map((m) => {
+    const isChecked = p.selectedColors.some(sc => sc.name === m.name) ? 'checked' : '';
+    return `<label style="background:var(--main-bg); padding:4px 8px; border-radius:4px; font-size:11px; cursor:pointer; border:1px solid var(--border); display:flex; align-items:center; gap:6px; white-space:nowrap;">
+       <input type="checkbox" ${isChecked} onchange="toggleColor('${m.name}', ${m.price}, this.checked)">
+       ${m.name}
+    </label>`;
+  }).join('') : `<span style="font-size:11px; color:var(--text-tertiary);">Nenhuma cor salva adicionada no menu lateral.</span>`;
 
   const content = document.getElementById('main-content');
   content.innerHTML = `
@@ -798,12 +866,15 @@ function renderCostSection() {
       <div class="cost-group" style="border-bottom:none; margin-bottom:0; padding-bottom:0;">
         <div class="fields-row">
           <div class="field-group" style="flex: 2; min-width: 200px;">
-            <label>Cores Disponíveis nas Variações</label>
-            <input type="text" id="available-colors" class="field-input" style="margin:0;" value="${p.availableColors || ''}" oninput="onColors(this.value)" placeholder="Ex: Preto, Branco, Transparente...">
+            <label>Quais cores suas compõe as variações deste produto?</label>
+            <div style="display:flex; flex-wrap:wrap; gap:8px; margin-top:4px;">
+              ${coresHtml}
+            </div>
+            <input type="hidden" id="available-colors" value="${p.availableColors||''}">
           </div>
-          <div class="field-group" style="flex: 1; min-width: 120px;">
+          <div class="field-group" style="flex: 1; min-width: 120px; align-self:flex-start;">
             <label>Nº de Variações na Tela</label>
-            <input type="text" inputmode="numeric" id="max-qty" class="field-input" style="margin:0; text-align: center;" value="${p.maxQuantities || 5}" oninput="onMaxQty(this.value)" placeholder="1 a 5">
+            <input type="text" inputmode="numeric" id="max-qty" class="field-input" style="margin:0; text-align: center;" value="${p.maxQuantities || 5}" oninput="onMaxQty(this.value)" placeholder="1 a 10">
           </div>
         </div>
       </div>
@@ -881,16 +952,30 @@ function renderCostSection() {
       <div class="cost-group" style="border-bottom:none;padding-bottom:0;">
         <div class="fields-row">
           <div class="field-group">
-            <label>📄 Imposto (%)</label>
-            <input type="text" inputmode="decimal" id="tax-pct" value="${valBR(p.taxPct)}" oninput="onTax(this.value)" style="font-style: italic;">
+            <label style="display:flex; justify-content:space-between">
+              <span>📄 Imposto Padrão (%)</span>
+              <a href="#" onclick="newTax(); return false;" style="color:var(--green); text-decoration:none;">+ Add</a>
+            </label>
+            <select onchange="document.getElementById('tax-pct').value = fmtIn(Number(this.value)); onTax(this.value);" style="font-style:italic; margin-bottom:4px;">
+              <option value="">-- Puxar Salvo --</option>
+              ${(currentUserSettings?.taxes || []).map((t) => `<option value="${t.pct}">${t.name} (${fmtIn(t.pct)}%)</option>`).join('')}
+            </select>
+            <input type="text" inputmode="decimal" id="tax-pct" value="${valBR(p.taxPct)}" oninput="onTax(this.value)">
           </div>
           <div class="field-group">
-            <label>📦 Embalagem (R$)</label>
+            <label style="display:flex; justify-content:space-between">
+              <span>📦 Embalagem Padrão</span>
+              <a href="#" onclick="newPackage(); return false;" style="color:var(--green); text-decoration:none;">+ Add</a>
+            </label>
+            <select onchange="document.getElementById('packaging').value = fmtIn(Number(this.value)); onPackaging(this.value);" style="font-style:italic; margin-bottom:4px;">
+              <option value="">-- Puxar Salva --</option>
+              ${(currentUserSettings?.packages || []).map((b) => `<option value="${b.price}">${b.name} (R$${fmtIn(b.price)})</option>`).join('')}
+            </select>
             <input type="text" inputmode="decimal" id="packaging" value="${valBR(p.packagingCost)}" oninput="onPackaging(this.value)">
           </div>
           <div class="field-group">
             <label>📢 Ads / un. (R$)</label>
-            <input type="text" inputmode="decimal" id="ads-cost" value="${valBR(p.adsCost)}" oninput="onAds(this.value)">
+            <input type="text" inputmode="decimal" id="ads-cost" style="margin-top:23px;" value="${valBR(p.adsCost)}" oninput="onAds(this.value)">
           </div>
         </div>
       </div>
@@ -914,10 +999,48 @@ function renderAllQtyCards() {
   const container = document.getElementById('qty-cards');
   if (!container) return;
   container.innerHTML = '';
-  const max = Math.max(1, Math.min(5, parseInt(currentProduct.maxQuantities) || 5));
-  for (let i = 0; i < max && i < currentProduct.quantities.length; i++) {
+  const max = Math.max(1, Math.min(10, parseInt(currentProduct.maxQuantities) || 10)); // max 10
+  
+  while (currentProduct.quantities.length < max) {
+    const nextQ = currentProduct.quantities.length + 1;
+    currentProduct.quantities.push({ label: nextQ+' unidades', qty: nextQ, margin: 20, comps: ['','',''] });
+  }
+
+  for (let i = 0; i < max; i++) {
     container.appendChild(buildQtyCard(i));
   }
+}
+
+function createColorsTableHtml(p, q, idx) {
+  if (!p.selectedColors || p.selectedColors.length === 0) return '';
+  let html = `<div style="margin-top:12px; border-top:1px dashed var(--border); padding-top:8px;">
+    <div style="font-size:11px; font-weight:600; color:var(--text-secondary); margin-bottom:6px;">Preços de Referência por Cor (Margem ${q.margin.toFixed(2)}%)</div>
+    <table style="width:100%; font-size:10px; border-collapse:collapse; text-align:left;">
+      <tr>
+        <th style="padding:4px 4px; border-bottom:1px solid var(--border); color:var(--text-tertiary);">Cor</th>
+        <th style="padding:4px 4px; border-bottom:1px solid var(--border); text-align:right; color:var(--text-tertiary);">C. Peça</th>
+        <th style="padding:4px 4px; border-bottom:1px solid var(--border); text-align:right; color:var(--green);">P. Sugerido</th>
+        <th style="padding:4px 4px; border-bottom:1px solid var(--border); text-align:right; color:var(--blue-text);">Lucro Liq.</th>
+      </tr>`;
+      
+  p.selectedColors.forEach(c => {
+    const cFilCost = ((c.priceKg / 1000) * p.filamentGrams) + (parseFloat(p.energyCost)||0);
+    const cTape    = (p.useTape !== false && p.tapeRollM > 0) ? (p.tapeRollPrice / (p.tapeRollM * 100)) * p.tapeCmUnit : 0;
+    const cAcc     = (p.accessories || []).reduce((s, a) => s + (parseFloat(a.cost) || 0), 0);
+    const cpuT     = cFilCost + cTape + cAcc + (parseFloat(p.packagingCost) || 0) + (parseFloat(p.adsCost) || 0);
+    const tcR      = cpuT * q.qty;
+    const prS      = priceFromMargin(tcR, q.margin, p);
+    const res      = calcFromPrice(tcR, prS, p);
+    
+    html += `<tr>
+      <td style="padding:4px 4px; font-weight:500;">${c.name}</td>
+      <td style="padding:4px 4px; text-align:right; color:var(--text-secondary);">${fmt(cFilCost * q.qty)}</td>
+      <td style="padding:4px 4px; text-align:right; color:var(--green); font-weight:600;">${fmt(prS)}</td>
+      <td style="padding:4px 4px; text-align:right; color:var(--blue-text);">${fmt(res.profit)}</td>
+    </tr>`;
+  });
+  html += `</table></div>`;
+  return html;
 }
 
 function buildQtyCard(idx) {
@@ -1001,6 +1124,10 @@ function buildQtyCard(idx) {
         <span class="qty-stat-value profit" id="stat-profit-${idx}" style="font-size: 14px;">${fmt(profit)}</span>
       </div>
     </div>
+    
+    <div id="colortable-${idx}">
+      ${createColorsTableHtml(p, q, idx)}
+    </div>
 
     <div class="margin-row">
       <span class="margin-label">Margem</span>
@@ -1053,6 +1180,8 @@ function updateQtyCard(idx) {
   if(el('stat-tax-'+idx)) el('stat-tax-'+idx).textContent = fmt(taxVal);
   if(el('stat-fees-'+idx)) el('stat-fees-'+idx).textContent = fmt(fees);
   if(el('stat-profit-'+idx)) el('stat-profit-'+idx).textContent = fmt(profit);
+
+  if(el('colortable-'+idx)) el('colortable-'+idx).innerHTML = createColorsTableHtml(p, q, idx);
 
   el('sl-'+idx).value = q.margin.toFixed(2);
   el('margin-display-'+idx).textContent = q.margin.toFixed(2) + '%';
@@ -1186,7 +1315,12 @@ function readFormIntoProduct() {
 
 // ---- HELPERS ----
 function el(id) { return document.getElementById(id); }
-function setStatus(msg) { el('save-status').textContent = msg; }
+function setStatus(msg) { 
+  el('save-status').textContent = msg; 
+  if (el('fab-save-status')) {
+    el('fab-save-status').textContent = msg === '' ? 'Salvar Produto' : msg;
+  }
+}
 function setLoading(v)  { el('loading').classList.toggle('visible', v); }
 
 function showToast(msg, type = '') {
