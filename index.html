@@ -367,6 +367,17 @@
     .toast.success { background: var(--green); }
     .toast.error { background: var(--red); }
 
+    /* ---- LEGENDS E CAMPOS (UX) ---- */
+    .form-legend {
+      display: flex; gap: 16px; font-size: 11px; margin-bottom: -10px;
+      padding: 6px 0; border-radius: var(--radius-sm);
+    }
+    .legend-item { display: flex; align-items: center; gap: 6px; }
+    .legend-req { width: 12px; height: 12px; border: 2px solid var(--green); border-radius: 3px; background: white; }
+    .legend-opt { width: 12px; height: 12px; border: 1.5px solid #cbd5e1; border-radius: 3px; background: white; }
+    .field-input.req, select.req { border-color: var(--green); border-width: 1.5px; }
+    .field-input.opt, select.opt { border-color: #cbd5e1; border-width: 1.5px; opacity: 0.9; }
+
     /* ---- FAB SAVE ---- */
     .btn-fab-save {
       position: fixed; bottom: 24px; right: 24px;
@@ -436,7 +447,15 @@
         <button onclick="newMaterial()" style="background:transparent;border:none;color:var(--green);cursor:pointer;font-weight:bold;font-size:16px;">+</button>
       </div>
     </div>
-    <div class="product-list" id="materials-list" style="flex: none; height: 160px; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 8px;"></div>
+    <div class="product-list" id="materials-list" style="flex: auto; min-height:80px; max-height: 120px; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 8px;"></div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-section-label" style="display:flex; justify-content:space-between; align-items:center;">
+        <span>Embalagens Salvas</span>
+        <button onclick="newPackage()" style="background:transparent;border:none;color:var(--green);cursor:pointer;font-weight:bold;font-size:16px;">+</button>
+      </div>
+    </div>
+    <div class="product-list" id="packages-list" style="flex: auto; min-height:80px; max-height: 120px; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 8px;"></div>
 
     <div class="sidebar-section">
       <div class="sidebar-section-label" style="display:flex; justify-content:space-between; align-items:center;">
@@ -444,7 +463,7 @@
         <button onclick="newTax()" style="background:transparent;border:none;color:var(--green);cursor:pointer;font-weight:bold;font-size:16px;">+</button>
       </div>
     </div>
-    <div class="product-list" id="taxes-list" style="flex: none; height: 120px; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 8px;"></div>
+    <div class="product-list" id="taxes-list" style="flex: auto; min-height:80px; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 8px;"></div>
 
     <div class="sidebar-footer">
       <div class="user-info">
@@ -664,8 +683,9 @@ async function loadSettings() {
   if (!currentUserSettings.materials) currentUserSettings.materials = [];
   if (!currentUserSettings.packages) currentUserSettings.packages = [];
   if (!currentUserSettings.taxes) currentUserSettings.taxes = [];
-  renderMaterialsSidebar();
-  renderTaxesSidebar();
+  renderSidebarGroup('materials', 'materials-list');
+  renderSidebarGroup('packages', 'packages-list');
+  renderSidebarGroup('taxes', 'taxes-list');
 }
 
 async function saveSettings() {
@@ -736,19 +756,66 @@ function renderProductList() {
   `).join('');
 }
 
-function renderMaterialsSidebar() {
-  const el = document.getElementById('materials-list');
-  if (!currentUserSettings.materials.length) {
-    el.innerHTML = `<div style="padding: 8px 10px; font-size: 11px; color: rgba(255, 255, 255, 0.5);">Nenhuma cor salva</div>`;
+function renderSidebarGroup(type, containerId) {
+  const el = document.getElementById(containerId);
+  const list = currentUserSettings[type] || [];
+  if (!list.length) {
+    el.innerHTML = `<div style="padding: 8px 10px; font-size: 11px; color: rgba(255, 255, 255, 0.5);">Nenhum salvo</div>`;
     return;
   }
-  el.innerHTML = currentUserSettings.materials.map((m, i) => `
-    <div class="product-item" style="font-size: 12px; padding: 6px 10px;">
-      <span class="product-item-name" style="flex:1;">${m.name} <br><span style="font-size:10px; opacity:0.7;">R$ ${fmtIn(m.price)}/kg</span></span>
-      <button class="product-delete" onclick="deleteMaterial(${i}, event)" title="Excluir">×</button>
+  el.innerHTML = list.map((m, i) => `
+    <div class="product-item" style="font-size: 11px; padding: 4px 6px; cursor:default; align-items:center;">
+      <div style="flex:1;">
+        <div class="product-item-name" style="font-weight:600;">${m.name}</div>
+        <div style="font-size:9px; color:rgba(255,255,255,0.6);">${type==='taxes'?fmtIn(m.pct)+'%':fmt(m.price)}</div>
+      </div>
+      <div style="display:flex; flex-direction:column; gap:2px; margin-left:8px;">
+        <div style="display:flex; gap:2px;">
+           <button class="product-delete" style="opacity:1; width:16px; height:16px; font-size:10px; line-height:10px;" onclick="moveSetting('${type}', ${i}, -1)">▲</button>
+           <button class="product-delete" style="opacity:1; width:16px; height:16px; font-size:10px; line-height:10px;" onclick="moveSetting('${type}', ${i}, 1)">▼</button>
+        </div>
+        <div style="display:flex; gap:2px;">
+           <button class="product-delete" style="opacity:1; width:16px; height:16px; font-size:10px; line-height:10px;" onclick="editSetting('${type}', ${i})">✎</button>
+           <button class="product-delete" style="opacity:1; width:16px; height:16px; font-size:10px; line-height:10px; color:#dc2626;" onclick="deleteSetting('${type}', ${i}, event)">✖</button>
+        </div>
+      </div>
     </div>
   `).join('');
   if (currentProduct) renderCostSection();
+}
+
+function editSetting(type, i) {
+  const list = currentUserSettings[type];
+  const item = list[i];
+  const newName = prompt(`Novo Nome (${item.name}):`, item.name);
+  if (!newName) return;
+  const rawValue = prompt(`Novo Valor numérico (${fmtIn(item.price || item.pct)}):`, fmtIn(item.price || item.pct));
+  if (!rawValue) return;
+  
+  item.name = newName;
+  if (type === 'taxes') item.pct = parseBR(rawValue);
+  else item.price = parseBR(rawValue);
+  
+  saveSettings();
+  renderSidebarGroup(type, type + '-list');
+}
+
+function moveSetting(type, i, dir) {
+  const list = currentUserSettings[type];
+  if (i + dir < 0 || i + dir >= list.length) return;
+  const temp = list[i];
+  list[i] = list[i+dir];
+  list[i+dir] = temp;
+  saveSettings();
+  renderSidebarGroup(type, type + '-list');
+}
+
+function deleteSetting(type, i, e) {
+  e.stopPropagation();
+  if (!confirm('Excluir este item salvo?')) return;
+  currentUserSettings[type].splice(i, 1);
+  saveSettings();
+  renderSidebarGroup(type, type + '-list');
 }
 
 function newMaterial() {
@@ -758,15 +825,7 @@ function newMaterial() {
   if (!price) return;
   currentUserSettings.materials.push({ name, price: parseBR(price) });
   saveSettings();
-  renderMaterialsSidebar();
-}
-
-function deleteMaterial(i, e) {
-  e.stopPropagation();
-  if (!confirm('Excluir esta cor salva?')) return;
-  currentUserSettings.materials.splice(i, 1);
-  saveSettings();
-  renderMaterialsSidebar();
+  renderSidebarGroup('materials', 'materials-list');
 }
 
 function newPackage() {
@@ -787,29 +846,6 @@ function newTax() {
   currentUserSettings.taxes.push({ name, pct: parseBR(pct) });
   saveSettings();
   if(currentProduct) renderCostSection();
-}
-
-function renderTaxesSidebar() {
-  const el = document.getElementById('taxes-list');
-  if (!currentUserSettings.taxes.length) {
-    el.innerHTML = `<div style="padding: 8px 10px; font-size: 11px; color: rgba(255, 255, 255, 0.5);">Nenhum salvo</div>`;
-    return;
-  }
-  el.innerHTML = currentUserSettings.taxes.map((t, i) => `
-    <div class="product-item" style="font-size: 12px; padding: 6px 10px;">
-      <span class="product-item-name" style="flex:1;">${t.name} <br><span style="font-size:10px; opacity:0.7;">${fmtIn(t.pct)}%</span></span>
-      <button class="product-delete" onclick="deleteTax(${i}, event)" title="Excluir">×</button>
-    </div>
-  `).join('');
-  if (currentProduct) renderCostSection();
-}
-
-function deleteTax(i, e) {
-  e.stopPropagation();
-  if (!confirm('Excluir este imposto salvo?')) return;
-  currentUserSettings.taxes.splice(i, 1);
-  saveSettings();
-  renderTaxesSidebar();
 }
 
 function applyMaterial(i) {
@@ -894,140 +930,142 @@ function renderCostSection() {
        <input type="checkbox" ${isChecked} onchange="toggleColor('${m.name}', ${m.price}, this.checked)">
        ${m.name}
     </label>`;
-  }).join('') : `<span style="font-size:11px; color:var(--text-tertiary);">Nenhuma cor salva adicionada no menu lateral.</span>`;
+  }).join('') : '';
 
-  const content = document.getElementById('main-content');
-  content.innerHTML = `
-    <div class="section">
-      <div class="section-title">Configurações do Anúncio</div>
-      <div class="cost-group" style="border-bottom:none; margin-bottom:0; padding-bottom:0;">
-        <div class="fields-row">
-          <div class="field-group" style="flex: 2; min-width: 200px;">
-            <label>Quais cores suas compõe as variações deste produto?</label>
-            <div style="display:flex; flex-wrap:wrap; gap:8px; margin-top:4px;">
-              ${coresHtml}
+  const taxSelectHTML = `
+    <a href="#" onclick="newTax(); return false;" style="color:var(--green); text-decoration:none; font-size:11px;">+ Add</a>
+    <select onchange="document.getElementById('tax-pct').value = fmtIn(Number(this.value)); onTax(this.value);" style="font-style:italic; margin-left:8px; font-size:11px; padding:4px 6px; border-radius:4px; border:1px solid var(--border); background:var(--main-bg);">
+      <option value="">-- Puxar Salvo --</option>
+      ${(currentUserSettings?.taxes || []).map((t) => `<option value="${t.pct}">${t.name} (${fmtIn(t.pct)}%)</option>`).join('')}
+    </select>`;
+
+  const pkgSelectHTML = `
+    <a href="#" onclick="newPackage(); return false;" style="color:var(--green); text-decoration:none; font-size:11px;">+ Add</a>
+    <select onchange="document.getElementById('packaging').value = fmtIn(Number(this.value)); onPackaging(this.value);" style="font-style:italic; margin-left:8px; font-size:11px; padding:4px 6px; border-radius:4px; border:1px solid var(--border); background:var(--main-bg);">
+      <option value="">-- Puxar Salva --</option>
+      ${(currentUserSettings?.packages || []).map((b) => `<option value="${b.price}">${b.name} (R$${fmtIn(b.price)})</option>`).join('')}
+    </select>`;
+
+  const costHTML = `
+    <div class="section" id="cost-section">
+      <div class="section-title">1. Configuração de Base da Peça</div>
+      
+      <div class="form-legend">
+        <div class="legend-item"><div class="legend-req"></div> <span style="color:var(--text-secondary);">Obrigatório</span></div>
+        <div class="legend-item"><div class="legend-opt"></div> <span style="color:var(--text-secondary);">Opcional</span></div>
+      </div>
+
+      <div class="cost-group">
+        <div class="cost-group-header">
+          <span class="cost-group-label">Peça Impressa</span>
+          <span class="cost-calc">${fmt(filCost)}</span>
+        </div>
+        
+        <div class="fields-row" style="margin-bottom:12px;">
+          <div class="field-group" style="flex:3;">
+            <label>Cores Disponíveis nas Variações</label>
+            <div style="display:flex; flex-wrap:wrap; gap:8px; padding:6px 0;">
+              ${colorsHTML}
+              ${colorsHTML === '' ? '<span style="font-size:11px; color:var(--text-tertiary); font-style:italic;">Nenhuma cor salva na lateral.</span>' : ''}
             </div>
             <input type="hidden" id="available-colors" value="${p.availableColors||''}">
           </div>
           <div class="field-group" style="flex: 1; min-width: 120px; align-self:flex-start;">
             <label>Nº de Variações</label>
-            <input type="text" inputmode="numeric" id="max-qty" class="field-input" style="margin:0; text-align: center;" value="${p.maxQuantities || 5}" oninput="onMaxQty(this.value)" placeholder="1 a 15">
+            <input type="text" inputmode="numeric" id="max-qty" class="field-input req" style="margin:0; text-align: center;" value="${p.maxQuantities || 5}" oninput="onMaxQty(this.value)" placeholder="1 a 15">
           </div>
         </div>
-      </div>
-    </div>
 
-    <div class="section">
-      <div class="section-title">Custos por Unidade</div>
-
-      <div class="cost-group">
-        <div class="cost-group-header">
-          <span class="cost-group-label">🧵 Peça Impressa</span>
-          <span class="cost-calc" id="fil-cost">${fmt(filCost)}</span>
-        </div>
         <div class="fields-row">
           <div class="field-group">
-            <label>Nome / Tipo</label>
-            <input type="text" id="fil-type" value="${p.filamentType || ''}" placeholder="PLA" oninput="onFilType(this.value)">
-          </div>
-          <div class="field-group">
-            <label>Carregar Cor Salva</label>
-            <select onchange="applyMaterial(this.value)" style="font-style:italic;">
-              <option value="">-- Suas Cores --</option>
-              ${(currentUserSettings?.materials || []).map((m, idx) => `<option value="${idx}">${m.name} (R$${fmtIn(m.price)})</option>`).join('')}
-            </select>
+            <label>Material Principal</label>
+            <input type="text" id="fil-type" class="field-input req" placeholder="Ex: PLA" value="${p.filamentType || ''}" oninput="onFilType(this.value)">
           </div>
           <div class="field-group">
             <label>Preço/kg (R$)</label>
-            <input type="text" inputmode="decimal" id="fil-price-kg" value="${valBR(p.filamentPriceKg)}" placeholder="0,00" oninput="onFilPrice(this.value)">
+            <input type="text" inputmode="decimal" id="fil-price-kg" class="field-input req" value="${valBR(p.filamentPriceKg)}" oninput="onFilPrice(this.value)">
           </div>
           <div class="field-group">
-            <label>Gramas (g)</label>
-            <input type="text" inputmode="decimal" id="fil-grams" value="${valBR(p.filamentGrams)}" placeholder="0" oninput="onFilGrams(this.value)">
+            <label>Peso (g)</label>
+            <input type="text" inputmode="numeric" id="fil-grams" class="field-input req" value="${p.filamentGrams || ''}" oninput="onFilGrams(this.value)">
           </div>
           <div class="field-group">
-            <label>Energia/peça (R$)</label>
-            <input type="text" inputmode="decimal" id="energy-cost" value="${valBR(p.energyCost)}" placeholder="0,00" oninput="onEnergy(this.value)">
-          </div>
-        </div>
-      </div>
-
-      <div class="cost-group">
-        <div class="cost-group-header" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
-          <div style="display: flex; align-items: center; gap: 8px;">
-            <span class="cost-group-label" style="margin-bottom: 0;">📏 Fita Dupla Face</span>
-            <label style="font-size: 11px; display: flex; align-items: center; gap: 4px; cursor: pointer; color: var(--text-secondary); margin-bottom: 0;">
-              <input type="checkbox" id="use-tape" ${p.useTape !== false ? 'checked' : ''} onchange="onUseTape(this.checked)"> Usar fita
-            </label>
-          </div>
-          <span class="cost-calc" id="tape-cost" style="${p.useTape !== false ? '' : 'display:none;'}">${fmt(tapCost)}</span>
-        </div>
-        <div class="fields-row" id="tape-fields" style="${p.useTape !== false ? '' : 'display:none;'}">
-          <div class="field-group">
-            <label>Preço do rolo (R$)</label>
-            <input type="text" inputmode="decimal" id="tape-roll-price" value="${valBR(p.tapeRollPrice)}" oninput="onTape()">
-          </div>
-          <div class="field-group">
-            <label>Comprimento do rolo (m)</label>
-            <input type="text" inputmode="decimal" id="tape-roll-m" value="${valBR(p.tapeRollM)}" oninput="onTape()">
-          </div>
-          <div class="field-group">
-            <label>Uso por unidade (cm)</label>
-            <input type="text" inputmode="decimal" id="tape-cm-unit" value="${valBR(p.tapeCmUnit)}" oninput="onTape()">
+            <label>Energia/Outros (R$)</label>
+            <input type="text" inputmode="decimal" id="energy-cost" class="field-input opt" value="${valBR(p.energyCost)}" oninput="onEnergy(this.value)" placeholder="Ex: 0,50">
           </div>
         </div>
       </div>
 
       <div class="cost-group">
         <div class="cost-group-header">
-          <span class="cost-group-label">🔩 Acessórios / Parafusos</span>
+          <span class="cost-group-label" style="display:flex; align-items:center; gap:8px;">
+            <input type="checkbox" id="use-tape" ${p.useTape !== false ? 'checked' : ''} onchange="onUseTape(this.checked)" style="accent-color:var(--green); width:16px; height:16px; cursor:pointer;">
+             Fita Dupla Face
+          </span>
+          <span class="cost-calc" id="tape-calc-display">${fmt(tapCost)}</span>
         </div>
-        <div id="acc-list">${accHTML}</div>
-        <button class="btn-add-acc" onclick="addAcc()">+ Adicionar acessório</button>
-      </div>
-
-      <div class="cost-group" style="border-bottom:none;padding-bottom:0;">
-        <div class="fields-row">
+        <div class="fields-row" id="tape-fields" style="display: ${p.useTape !== false ? 'grid' : 'none'};">
           <div class="field-group">
-            <label style="display:flex; justify-content:space-between">
-              <span>📄 Imposto Padrão (%)</span>
-              <a href="#" onclick="newTax(); return false;" style="color:var(--green); text-decoration:none;">+ Add</a>
-            </label>
-            <select onchange="document.getElementById('tax-pct').value = fmtIn(Number(this.value)); onTax(this.value);" style="font-style:italic; margin-bottom:4px;">
-              <option value="">-- Puxar Salvo --</option>
-              ${(currentUserSettings?.taxes || []).map((t) => `<option value="${t.pct}">${t.name} (${fmtIn(t.pct)}%)</option>`).join('')}
-            </select>
-            <input type="text" inputmode="decimal" id="tax-pct" value="${valBR(p.taxPct)}" oninput="onTax(this.value)">
+            <label>Preço Rolo (R$)</label>
+            <input type="text" inputmode="decimal" id="tape-roll-price" class="field-input req" value="${valBR(p.tapeRollPrice)}" oninput="onTapeRollPrice(this.value)">
           </div>
           <div class="field-group">
-            <label style="display:flex; justify-content:space-between">
-              <span>📦 Embalagem Padrão</span>
-              <a href="#" onclick="newPackage(); return false;" style="color:var(--green); text-decoration:none;">+ Add</a>
-            </label>
-            <select onchange="document.getElementById('packaging').value = fmtIn(Number(this.value)); onPackaging(this.value);" style="font-style:italic; margin-bottom:4px;">
-              <option value="">-- Puxar Salva --</option>
-              ${(currentUserSettings?.packages || []).map((b) => `<option value="${b.price}">${b.name} (R$${fmtIn(b.price)})</option>`).join('')}
-            </select>
-            <input type="text" inputmode="decimal" id="packaging" value="${valBR(p.packagingCost)}" oninput="onPackaging(this.value)">
+            <label>Metros Rolo</label>
+            <input type="text" inputmode="numeric" id="tape-roll-m" class="field-input req" value="${p.tapeRollM || ''}" oninput="onTapeRollM(this.value)">
+          </div>
+          <div class="field-group">
+            <label>Cm/Unidade</label>
+            <input type="text" inputmode="numeric" id="tape-cm-unit" class="field-input req" value="${p.tapeCmUnit || ''}" oninput="onTapeCmUnit(this.value)">
+          </div>
+        </div>
+      </div>
+
+      <div class="cost-group">
+        <div class="cost-group-header">
+          <span class="cost-group-label">Acessórios (Pés, Borrachas)</span>
+          <span class="cost-calc" id="acc-calc-display">${fmt((p.accessories || []).reduce((s, a) => s + (parseFloat(a.cost) || 0), 0))}</span>
+        </div>
+        <div id="acc-list" style="margin-bottom:8px;">${accHTML}</div>
+        <button class="btn-add-acc" onclick="addAcc()">+ Adicionar Acessório Opcional</button>
+      </div>
+
+      <div class="cost-group">
+        <div class="cost-group-header"><span class="cost-group-label">Custos Logísticos Globais</span></div>
+        <div class="fields-row" style="align-items: flex-end;">
+          <div class="field-group">
+            <div style="display:flex; justify-content:space-between; align-items:flex-end;">
+              <label>Imposto Padrão (%)</label>
+              ${taxSelectHTML}
+            </div>
+            <input type="text" inputmode="decimal" id="tax-pct" class="field-input req" value="${valBR(p.taxPct)}" oninput="onTax(this.value)">
+          </div>
+          <div class="field-group">
+            <div style="display:flex; justify-content:space-between; align-items:flex-end;">
+              <label>Embalagem Padrão (R$)</label>
+              ${pkgSelectHTML}
+            </div>
+            <input type="text" inputmode="decimal" id="packaging" class="field-input req" value="${valBR(p.packagingCost)}" oninput="onPackaging(this.value)">
           </div>
           <div class="field-group">
             <label>📢 Ads</label>
-            <input type="text" inputmode="decimal" id="ads-cost" style="margin-top:23px;" value="${valBR(p.adsCost)}" oninput="onAds(this.value)">
+            <input type="text" inputmode="decimal" id="ads-cost" class="field-input opt" style="margin-top:23px;" value="${valBR(p.adsCost)}" oninput="onAds(this.value)">
           </div>
         </div>
       </div>
 
-      <div class="total-cost-bar">
-        <span>Custo total por unidade</span>
-        <span id="total-cpu">${fmt(cpu)}</span>
+      <div class="cost-group">
+        <div class="total-cost-bar">
+        <span>Custo Total Unidade Padrão</span>
+        <span id="glb-cpu-display">${fmt(cpu)}</span>
       </div>
     </div>
 
     <div class="section">
-      <div class="section-title">Precificação por Quantidade</div>
+      <div class="section-title">2. Precificação por Quantidade ${p.selectedColors && p.selectedColors.length > 0 ? '(Individualizada por Cor)' : ''}</div>
       <div class="qty-cards-grid" id="qty-cards"></div>
     </div>`;
 
+  document.getElementById('main-content').innerHTML = costHTML;
   renderAllQtyCards();
 }
 
@@ -1044,187 +1082,206 @@ function renderAllQtyCards() {
   }
 
   for (let i = 0; i < max; i++) {
-    container.appendChild(buildQtyCard(i));
+    const div = document.createElement('div');
+    div.className = 'qty-card-wrapper'; // Add a wrapper for the card
+    div.innerHTML = buildQtyCard(i, currentProduct.quantities[i]);
+    container.appendChild(div);
   }
+}
+
+function getCS(q, cName) {
+  if (!q.colorSettings) q.colorSettings = {};
+  if (!q.colorSettings[cName]) q.colorSettings[cName] = { margin: q.margin || 20, manualPrice: null, manualAdPrice: null };
+  return q.colorSettings[cName];
+}
+
+function calcColorCost(p, c) {
+  const cFilCost = ((c.priceKg / 1000) * p.filamentGrams) + (parseFloat(p.energyCost)||0);
+  const cTape    = (p.useTape !== false && p.tapeRollM > 0) ? (p.tapeRollPrice / (p.tapeRollM * 100)) * p.tapeCmUnit : 0;
+  const cAcc     = (p.accessories || []).reduce((s, a) => s + (parseFloat(a.cost) || 0), 0);
+  return cFilCost + cTape + cAcc + (parseFloat(p.packagingCost) || 0) + (parseFloat(p.adsCost) || 0);
+}
+
+function calcColorStats(p, q, c) {
+  const cFilCost = ((c.priceKg / 1000) * p.filamentGrams) + (parseFloat(p.energyCost)||0);
+  const cTape    = (p.useTape !== false && p.tapeRollM > 0) ? (p.tapeRollPrice / (p.tapeRollM * 100)) * p.tapeCmUnit : 0;
+  const cAcc     = (p.accessories || []).reduce((s, a) => s + (parseFloat(a.cost) || 0), 0);
+  const pPkg     = (parseFloat(p.packagingCost) || 0);
+  const pAds     = (parseFloat(p.adsCost) || 0);
+  const cpuT     = cFilCost + cTape + cAcc + pPkg + pAds;
+  const tcR      = cpuT * q.qty;
+
+  const cs = getCS(q, c.name);
+  const prS = cs.manualPrice != null ? cs.manualPrice : priceFromMargin(tcR, cs.margin, p);
+  const res = calcFromPrice(tcR, prS, p);
+  const autoAnuncio = prS * (1 + anuncioPct(q.qty - 1));
+  const anuncioVal = cs.manualAdPrice != null ? cs.manualAdPrice : autoAnuncio;
+
+  return { cFilCost, cTape, cAcc, pPkg, pAds, tcR, prS, res, anuncioVal, cs };
 }
 
 function createColorsTableHtml(p, q, idx) {
   if (!p.selectedColors || p.selectedColors.length === 0) return '';
-  let html = `<div style="margin-top:12px; border-top:1px dashed var(--border); padding-top:8px;">
-    <div style="font-size:11px; font-weight:600; color:var(--text-secondary); margin-bottom:6px;">Preços de Referência por Cor (Margem ${q.margin.toFixed(2)}%)</div>
-    <table style="width:100%; font-size:10px; border-collapse:collapse; text-align:left;">
-      <tr>
-        <th style="padding:4px 4px; border-bottom:1px solid var(--border); color:var(--text-tertiary);">Cor</th>
-        <th style="padding:4px 4px; border-bottom:1px solid var(--border); text-align:right; color:var(--text-tertiary);">C. Peça</th>
-        <th style="padding:4px 4px; border-bottom:1px solid var(--border); text-align:right; color:var(--green);">P. Sugerido</th>
-        <th style="padding:4px 4px; border-bottom:1px solid var(--border); text-align:right; color:var(--blue-text);">Lucro Liq.</th>
-      </tr>`;
+  let html = `<div style="margin-top:2px; padding-top:4px;">
+    <div style="display:flex; flex-direction:column; gap:10px;">`;
       
-  p.selectedColors.forEach(c => {
-    const cFilCost = ((c.priceKg / 1000) * p.filamentGrams) + (parseFloat(p.energyCost)||0);
-    const cTape    = (p.useTape !== false && p.tapeRollM > 0) ? (p.tapeRollPrice / (p.tapeRollM * 100)) * p.tapeCmUnit : 0;
-    const cAcc     = (p.accessories || []).reduce((s, a) => s + (parseFloat(a.cost) || 0), 0);
-    const cpuT     = cFilCost + cTape + cAcc + (parseFloat(p.packagingCost) || 0) + (parseFloat(p.adsCost) || 0);
-    const tcR      = cpuT * q.qty;
-    const prS      = priceFromMargin(tcR, q.margin, p);
-    const res      = calcFromPrice(tcR, prS, p);
-    
-    html += `<tr>
-      <td style="padding:4px 4px; font-weight:500;">${c.name}</td>
-      <td style="padding:4px 4px; text-align:right; color:var(--text-secondary);">${fmt(cFilCost * q.qty)}</td>
-      <td style="padding:4px 4px; text-align:right; color:var(--green); font-weight:600;">${fmt(prS)}</td>
-      <td style="padding:4px 4px; text-align:right; color:var(--blue-text);">${fmt(res.profit)}</td>
-    </tr>`;
+  p.selectedColors.forEach((c) => {
+    const s = calcColorStats(p, q, c);
+    html += `
+    <div style="background:#f9fafb; border:1px solid var(--border); border-radius:6px; padding:10px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px dashed #d1d5db; padding-bottom:6px; margin-bottom:8px;">
+        <div style="font-weight:700; font-size:13px; color:var(--text-primary); text-transform:uppercase;">${c.name}</div>
+        <div style="font-size:13px; font-weight:800; color:var(--blue-text);">Lucro: ${fmt(s.res.profit)}</div>
+      </div>
+      <div style="font-size:10px; color:var(--text-secondary); margin-bottom:10px; display:flex; gap:6px; flex-wrap:wrap; line-height:1.4;">
+        <span style="background:#e5e7eb; padding:2px 6px; border-radius:4px; color:#111;">Custo Total da Qtd: <b>${fmt(s.tcR)}</b></span>
+        <span>(Peça: ${fmt(s.cFilCost*q.qty)} | Emb/Fita: ${fmt((s.pPkg+s.cTape+s.cAcc)*q.qty)} | Ads: ${fmt(s.pAds*q.qty)} | Imp: ${fmt(s.prS*(p.taxPct||0)/100)} | Taxas: ${fmt(s.res.fees)})</span>
+      </div>
+      <div style="display:flex; gap:10px; align-items:center;">
+        <div style="flex:1; min-width:90px;">
+          <div style="font-size:10px; font-weight:600; color:var(--text-tertiary); margin-bottom:4px;">Margem %</div>
+          <div style="display:flex; align-items:center; gap:6px;">
+            <input type="range" style="flex:1;" min="1" max="60" step="0.01" value="${s.cs.margin}" oninput="onColorMargin(${idx}, '${c.name}', this.value)">
+            <span style="font-size:12px; font-weight:700; width:34px;">${Number(s.cs.margin).toFixed(0)}%</span>
+          </div>
+        </div>
+        <div>
+          <div style="font-size:10px; font-weight:600; color:var(--green); margin-bottom:4px;">Venda Padrão (R$)</div>
+          <input type="text" inputmode="decimal" class="field-input opt" style="width:75px; padding:6px; font-size:12px; font-weight:700; color:var(--green);" value="${fmtIn(s.prS)}" onblur="onColorPriceBlur(${idx}, '${c.name}', this.value)">
+        </div>
+        <div>
+          <div style="font-size:10px; font-weight:600; color:var(--amber); margin-bottom:4px; display:flex; justify-content:space-between; align-items:center;">
+            Cadastrado
+            ${s.cs.manualAdPrice != null ? `<span style="font-size:9px; color:var(--text-secondary); cursor:pointer; text-decoration:underline;" onclick="resetColorAd(${idx}, '${c.name}')">Limpar</span>` : ''}
+          </div>
+          <input type="text" inputmode="decimal" class="field-input opt" style="width:75px; padding:6px; font-size:12px; font-weight:700; color:var(--amber-text); border-color:var(--amber);" value="${fmtIn(s.anuncioVal)}" onblur="onColorAdBlur(${idx}, '${c.name}', this.value)">
+        </div>
+      </div>
+    </div>`;
   });
-  html += `</table></div>`;
+  html += `</div></div>`;
   return html;
 }
 
-function buildQtyCard(idx) {
-  const p    = currentProduct;
-  const q    = p.quantities[idx];
-  const cpu  = calcCostPerUnit(p);
-  const tc   = cpu * q.qty;
-  const price = priceFromMargin(tc, q.margin, p);
-  const { fees, profit } = calcFromPrice(tc, price, p);
-  const pct  = anuncioPct(idx);
-  const autoAnuncio = price * (1 + pct);
-  const anuncioVal = q.manualAdPrice != null ? q.manualAdPrice : autoAnuncio;
-  
-  const taxVal    = price * (parseFloat(p.taxPct || 0) / 100);
-  const printCost = (((p.filamentPriceKg / 1000) * p.filamentGrams) + (parseFloat(p.energyCost) || 0)) * q.qty;
-  const pkgCost   = (parseFloat(p.packagingCost) || 0) * q.qty;
-  const adsVal    = (parseFloat(p.adsCost) || 0) * q.qty;
-  const tapeCost  = (p.useTape !== false && p.tapeRollM > 0 ? (p.tapeRollPrice / (p.tapeRollM * 100)) * p.tapeCmUnit : 0) * q.qty;
-  const accCost   = (p.accessories || []).reduce((s, a) => s + (parseFloat(a.cost) || 0), 0) * q.qty;
-  const offPct    = (anuncioVal - price) / price;
+function buildQtyCard(idx, q) {
+  const isMultiColor = currentProduct.selectedColors && currentProduct.selectedColors.length > 0;
+  const displayMain = isMultiColor ? 'none' : 'block';
 
-  const div = document.createElement('div');
-  div.className = 'qty-card';
-  div.id = `qcard-${idx}`;
-  div.innerHTML = `
-    <div class="qty-card-header">
-      <div class="qty-label-wrap">
-        <input class="qty-label-input" value="${q.label}" placeholder="Nome..." oninput="onQtyLabel(${idx}, this.value)" title="Clique para renomear">
-        <div class="qty-number-badge">×<input class="qty-number-input" type="text" inputmode="numeric" min="1" value="${q.qty}" oninput="onQtyNum(${idx}, this.value)" title="Quantidade"></div>
-      </div>
-      <div class="price-wrap">
-        <span class="price-prefix">R$</span>
-        <input class="price-main-input" type="text" inputmode="decimal" id="price-in-${idx}" value="${fmtIn(price)}"
-          onblur="onPriceBlur(${idx}, this.value)"
-          onkeydown="if(event.key==='Enter')this.blur()">
-      </div>
-    </div>
-
-    <div class="anuncio-box">
-      <div class="anuncio-left">
-        <div class="anuncio-label">Valor do anúncio cadastrado</div>
-        <div class="anuncio-sub">Preço final ${fmtPct(pct)} sobre o valor de venda</div>
-      </div>
-      <div class="anuncio-price" style="display: flex; gap: 8px; align-items: center;">
-        <div style="display: flex; align-items: center;">
-          <span style="font-size: 16px; font-weight: 600; color: var(--amber-text);">R$</span>
-          <input type="text" inputmode="decimal" id="anuncio-${idx}" value="${fmtIn(anuncioVal)}" onblur="onAnuncioBlur(${idx}, this.value)" style="width: 80px; background: transparent; border: none; border-bottom: 2px dashed #b45309; font-family: inherit; font-size: 18px; font-weight: 700; color: var(--amber-text); outline: none; text-align: right; font-style: italic;">
+  return `
+    <div class="qty-card" id="qcard-${idx}">
+      <div class="qty-card-header">
+        <div class="qty-label-wrap">
+          <div class="qty-number-badge"><input type="text" inputmode="numeric" class="qty-number-input" value="${q.qty}" oninput="onQtyNum(${idx}, this.value)"> un</div>
+          <input type="text" class="qty-label-input req" value="${q.label}" oninput="onQtyLabel(${idx}, this.value)">
         </div>
-        <button id="btn-reset-anuncio-${idx}" onclick="resetAnuncio(${idx})" style="background:transparent; border:none; color: var(--text-tertiary); cursor: pointer; font-size: 11px; text-decoration: underline; display: ${q.manualAdPrice != null ? 'block' : 'none'}; padding: 0;">Restaurar</button>
+        <div class="price-wrap" style="display:${displayMain};">
+          <span class="price-prefix">R$</span>
+          <input type="text" inputmode="decimal" class="price-main-input req" id="price-in-${idx}" value="0,00" onblur="onPriceBlur(${idx}, this.value)">
+        </div>
       </div>
-      <span class="off-pill" id="off-pill-${idx}">${Math.round(offPct * 100)}% off</span>
-    </div>
 
-    <div class="qty-stats" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; font-size: 10px;">
-      <div class="qty-stat">
-        <div class="qty-stat-label">Custo Peça</div>
-        <div class="qty-stat-value" id="stat-print-${idx}">${fmt(printCost)}</div>
-      </div>
-      <div class="qty-stat">
-        <div class="qty-stat-label">Embalagem</div>
-        <div class="qty-stat-value" id="stat-pkg-${idx}">${fmt(pkgCost)}</div>
-      </div>
-      <div class="qty-stat">
-        <div class="qty-stat-label">Fita/Acess.</div>
-        <div class="qty-stat-value" id="stat-acc-${idx}">${fmt(tapeCost + accCost)}</div>
-      </div>
-      <div class="qty-stat">
-        <div class="qty-stat-label">Ads</div>
-        <div class="qty-stat-value" id="stat-ads-${idx}">${fmt(adsVal)}</div>
-      </div>
-      <div class="qty-stat">
-        <div class="qty-stat-label">Imposto</div>
-        <div class="qty-stat-value" id="stat-tax-${idx}">${fmt(taxVal)}</div>
-      </div>
-      <div class="qty-stat">
-        <div class="qty-stat-label">Taxas Shopee</div>
-        <div class="qty-stat-value" id="stat-fees-${idx}">${fmt(fees)}</div>
-      </div>
-      <div class="qty-stat" style="grid-column: span 3; display: flex; justify-content: space-between; align-items: center; background: rgba(59, 130, 246, 0.05); border: 1px solid rgba(59, 130, 246, 0.2); padding: 6px 8px; border-radius: 4px; margin-top: 4px;">
-        <span class="qty-stat-label" style="font-size: 11px; font-weight: 600; color: var(--text-primary); margin-bottom: 0;">Lucro Líquido Total</span>
-        <span class="qty-stat-value profit" id="stat-profit-${idx}" style="font-size: 14px;">${fmt(profit)}</span>
-      </div>
-    </div>
-    
-    <div id="colortable-${idx}">
-      ${createColorsTableHtml(p, q, idx)}
-    </div>
+      <div id="colortable-${idx}"></div>
 
-    <div class="margin-row">
-      <span class="margin-label">Margem</span>
-      <input type="range" min="1" max="60" step="0.01" value="${q.margin.toFixed(2)}" id="sl-${idx}" oninput="onMarginSlider(${idx}, this.value)">
-      <span class="margin-display" id="margin-display-${idx}">${q.margin.toFixed(2)}%</span>
-    </div>
+      <div id="main-qty-content-${idx}" style="display:${displayMain};">
+        <div class="anuncio-box">
+          <div class="anuncio-left">
+            <div class="anuncio-label">Valor Venda + (${Math.round(anuncioPct(idx)*100)}%) Cadastro Base</div>
+            <div class="anuncio-sub">Acréscimo ref ao número de unidades</div>
+          </div>
+          <div style="display:flex; flex-direction:column; align-items:flex-end; gap:4px;">
+             <input type="text" inputmode="decimal" class="price-main-input opt" id="anuncio-${idx}" style="color:var(--amber-text); border-bottom-color:var(--amber); width:90px;" value="0,00" onblur="onAdBlur(${idx}, this.value)">
+             <div id="anuncio-reset-${idx}" style="display:none;font-size:10px;color:blue;cursor:pointer;text-decoration:underline;" onclick="resetAd(${idx})">Restaurar Original</div>
+          </div>
+        </div>
 
-    <div class="comp-section">
-      <div class="comp-title">Preços dos 3 melhores concorrentes</div>
-      <div class="comp-grid">
-        ${[0,1,2].map(ci => `
-          <div class="comp-col">
-            <label>Concorrente ${ci+1}</label>
-            <input type="text" inputmode="decimal" placeholder="R$ 0,00" value="${q.comps[ci]||''}" oninput="onComp(${idx},${ci},this.value)">
-            <span id="ctag-${idx}-${ci}">${compTag(price, q.comps[ci])}</span>
-          </div>`).join('')}
+        <div class="margin-row">
+          <span class="margin-label">Margem Desejada:</span>
+          <input type="range" id="margin-range-${idx}" min="1" max="60" step="0.01" value="${q.margin}" oninput="onMargin(${idx}, this.value)">
+          <span class="margin-display" id="margin-disp-${idx}">${Number(q.margin).toFixed(0)}%</span>
+        </div>
+
+        <div class="qty-stats">
+          <div class="qty-stat">
+            <div class="qty-stat-label">Custo Liq. Padrão</div>
+            <div class="qty-stat-value" id="stat-cost-${idx}">0,00</div>
+          </div>
+          <div class="qty-stat">
+            <div class="qty-stat-label">Taxas Padrão Base</div>
+            <div class="qty-stat-value" id="stat-fees-${idx}">0,00</div>
+          </div>
+          <div class="qty-stat">
+            <div class="qty-stat-label" style="color:var(--blue-text); font-weight:bold;">Lucro Un. Padrão</div>
+            <div class="qty-stat-value profit" id="stat-profit-${idx}">0,00</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="comp-section">
+        <div class="comp-title">Concorrentes Diretos (Opcional)</div>
+        <div class="comp-grid">
+           <div class="comp-col">
+             <label>Concorrente 1</label>
+             <input type="text" inputmode="decimal" class="opt" value="${valBR(q.comps[0])}" oninput="onComp(${idx}, 0, this.value)">
+             <div id="comp-t-${idx}-0"></div>
+           </div>
+           <div class="comp-col">
+             <label>Concorrente 2</label>
+             <input type="text" inputmode="decimal" class="opt" value="${valBR(q.comps[1])}" oninput="onComp(${idx}, 1, this.value)">
+             <div id="comp-t-${idx}-1"></div>
+           </div>
+           <div class="comp-col">
+             <label>Concorrente 3</label>
+             <input type="text" inputmode="decimal" class="opt" value="${valBR(q.comps[2])}" oninput="onComp(${idx}, 2, this.value)">
+             <div id="comp-t-${idx}-2"></div>
+           </div>
+        </div>
       </div>
     </div>`;
-  return div;
 }
 
 function updateQtyCard(idx) {
-  const p    = currentProduct;
-  const q    = p.quantities[idx];
-  const cpu  = calcCostPerUnit(p);
-  const tc   = cpu * q.qty;
-  const price = priceFromMargin(tc, q.margin, p);
-  const { fees, profit } = calcFromPrice(tc, price, p);
-  const pct  = anuncioPct(idx);
-  const autoAnuncio = price * (1 + pct);
-  const anuncioVal = q.manualAdPrice != null ? q.manualAdPrice : autoAnuncio;
+  const p = currentProduct;
+  const q = p.quantities[idx];
+  const isMultiColor = p.selectedColors && p.selectedColors.length > 0;
+  
+  if (isMultiColor) {
+    document.getElementById(`colortable-${idx}`).innerHTML = createColorsTableHtml(p, q, idx);
+    if (document.getElementById(`main-qty-content-${idx}`)) document.getElementById(`main-qty-content-${idx}`).style.display = 'none';
+    if (document.getElementById(`qcard-${idx}`).querySelector('.price-wrap')) document.getElementById(`qcard-${idx}`).querySelector('.price-wrap').style.display = 'none';
+  } else {
+    document.getElementById(`colortable-${idx}`).innerHTML = '';
+    if (document.getElementById(`main-qty-content-${idx}`)) document.getElementById(`main-qty-content-${idx}`).style.display = 'block';
+    if (document.getElementById(`qcard-${idx}`).querySelector('.price-wrap')) document.getElementById(`qcard-${idx}`).querySelector('.price-wrap').style.display = 'block';
+  }
 
-  const taxVal    = price * (parseFloat(p.taxPct || 0) / 100);
-  const printCost = (((p.filamentPriceKg / 1000) * p.filamentGrams) + (parseFloat(p.energyCost) || 0)) * q.qty;
-  const pkgCost   = (parseFloat(p.packagingCost) || 0) * q.qty;
-  const adsVal    = (parseFloat(p.adsCost) || 0) * q.qty;
-  const tapeCost  = (p.useTape !== false && p.tapeRollM > 0 ? (p.tapeRollPrice / (p.tapeRollM * 100)) * p.tapeCmUnit : 0) * q.qty;
-  const accCost   = (p.accessories || []).reduce((s, a) => s + (parseFloat(a.cost) || 0), 0) * q.qty;
-  const offPct    = (anuncioVal - price) / price;
+  const cpu = calcCostPerUnit(p);
+  const totalCost = cpu * q.qty;
+  
+  let finalPrice = q.manualPrice != null ? q.manualPrice : priceFromMargin(totalCost, q.margin, p);
+  const res = calcFromPrice(totalCost, finalPrice, p);
 
-  el('price-in-'+idx).value = fmtIn(price);
-  if(el('anuncio-'+idx)) el('anuncio-'+idx).value = fmtIn(anuncioVal);
-  if(el('btn-reset-anuncio-'+idx)) el('btn-reset-anuncio-'+idx).style.display = q.manualAdPrice != null ? 'block' : 'none';
-  if(el('off-pill-'+idx)) el('off-pill-'+idx).textContent = Math.round(offPct * 100) + '% off';
+  const pct = anuncioPct(idx);
+  let autoAnuncio = finalPrice * (1 + pct);
+  let finalAnuncio = q.manualAdPrice != null ? q.manualAdPrice : autoAnuncio;
 
-  if(el('stat-print-'+idx)) el('stat-print-'+idx).textContent = fmt(printCost);
-  if(el('stat-pkg-'+idx)) el('stat-pkg-'+idx).textContent = fmt(pkgCost);
-  if(el('stat-acc-'+idx)) el('stat-acc-'+idx).textContent = fmt(tapeCost + accCost);
-  if(el('stat-ads-'+idx)) el('stat-ads-'+idx).textContent = fmt(adsVal);
-  if(el('stat-tax-'+idx)) el('stat-tax-'+idx).textContent = fmt(taxVal);
-  if(el('stat-fees-'+idx)) el('stat-fees-'+idx).textContent = fmt(fees);
-  if(el('stat-profit-'+idx)) el('stat-profit-'+idx).textContent = fmt(profit);
+  if (document.getElementById(`price-in-${idx}`)) {
+    document.getElementById(`price-in-${idx}`).value = fmtIn(finalPrice);
+    document.getElementById(`stat-cost-${idx}`).textContent = fmt(totalCost);
+    document.getElementById(`stat-fees-${idx}`).textContent = fmt(res.fees);
+    document.getElementById(`stat-profit-${idx}`).innerHTML = fmt(res.profit) + ` <span style="font-size:10px; color:var(--text-tertiary);">(${Math.round(res.margin)}%)</span>`;
+    
+    document.getElementById(`anuncio-${idx}`).value = fmtIn(finalAnuncio);
+    if (q.manualAdPrice != null) document.getElementById(`anuncio-reset-${idx}`).style.display = 'block';
+    else document.getElementById(`anuncio-reset-${idx}`).style.display = 'none';
 
-  if(el('colortable-'+idx)) el('colortable-'+idx).innerHTML = createColorsTableHtml(p, q, idx);
+    document.getElementById(`margin-range-${idx}`).value = q.margin;
+    document.getElementById(`margin-disp-${idx}`).textContent = Number(q.margin).toFixed(0) + '%';
+  }
 
-  el('sl-'+idx).value = q.margin.toFixed(2);
-  el('margin-display-'+idx).textContent = q.margin.toFixed(2) + '%';
-  [0,1,2].forEach(ci => {
-    el(`ctag-${idx}-${ci}`).innerHTML = compTag(price, q.comps[ci]);
-  });
+  for(let i=0; i<3; i++) {
+    const el = document.getElementById(`comp-t-${idx}-${i}`);
+    if (el) el.innerHTML = compTag(finalPrice, q.comps[i]);
+  }
 }
 
 function resetAnuncio(idx) {
@@ -1243,7 +1300,7 @@ function onAnuncioBlur(idx, raw) {
 
 function updateAllQtyCards() {
   const cpu = calcCostPerUnit(currentProduct);
-  el('total-cpu').textContent = fmt(cpu);
+  if (el('glb-cpu-display')) el('glb-cpu-display').textContent = fmt(cpu);
   currentProduct.quantities.forEach((_, i) => updateQtyCard(i));
 }
 
@@ -1368,6 +1425,31 @@ function showToast(msg, type = '') {
 }
 
 function renderQtySection() {}
+
+function onColorMargin(idx, cName, val) {
+  getCS(currentProduct.quantities[idx], cName).margin = parseFloat(val);
+  getCS(currentProduct.quantities[idx], cName).manualPrice = null; 
+  updateQtyCard(idx);
+}
+function onColorPriceBlur(idx, cName, raw) {
+  const p = parseBR(raw);
+  if (p <= 0) { updateQtyCard(idx); return; }
+  getCS(currentProduct.quantities[idx], cName).manualPrice = p;
+  const c = currentProduct.selectedColors.find(x => x.name === cName);
+  const tcR = calcColorCost(currentProduct, c) * currentProduct.quantities[idx].qty;
+  const margin = Math.min(80, Math.max(1, marginFromPrice(tcR, p, currentProduct)));
+  getCS(currentProduct.quantities[idx], cName).margin = margin;
+  updateQtyCard(idx);
+}
+function onColorAdBlur(idx, cName, raw) {
+  if (raw.trim() === '') { getCS(currentProduct.quantities[idx], cName).manualAdPrice = null; }
+  else { getCS(currentProduct.quantities[idx], cName).manualAdPrice = parseBR(raw); }
+  updateQtyCard(idx);
+}
+function resetColorAd(idx, cName) {
+  getCS(currentProduct.quantities[idx], cName).manualAdPrice = null;
+  updateQtyCard(idx);
+}
 
 // ---- AUTH LISTENER ----
 if (!NEEDS_SETUP) {
