@@ -1504,27 +1504,26 @@ function createColorsTableHtml(p, q, idx) {
         <span style="font-size:13px; background:#e5e7eb; padding:2px 6px; border-radius:4px; color:#111;">Custo Total da Qtd: <b>${fmt(s.tcR)}</b></span>
         <span style="font-size:11px;">Emb/Fita/Aces: ${fmt((s.pPkg+s.cTape+s.cAcc)*q.qty)} | Ads: ${fmt(s.pAds*q.qty)} | Imp: ${fmt(s.prS*(p.taxPct||0)/100)} | Taxas: ${fmt(s.res.fees)} </span>
       </div>
-      <div style="display:flex; gap:10px; align-items:center;">
-        <div style="flex:1; min-width:90px;">
+      <div style="display:flex; gap:8px; align-items:center;">
+        <div style="flex:1.5; min-width:0;">
           <div style="font-size:11px; font-weight:700; color:var(--text-tertiary); margin-bottom:4px;">Margem %</div>
           <div style="display:flex; align-items:center; gap:2px;">
-            <input type="range" class="purple-slider" style="flex:1;" min="1" max="60" step="0.01" value="${s.cs.margin}" oninput="onColorMarginInput(${idx}, '${c.name}', this.value)" onchange="updateQtyCard(${idx})">
+            <input type="range" class="purple-slider" style="flex:1; min-width:0;" min="1" max="60" step="0.01" value="${s.cs.margin}" oninput="onColorMarginInput(${idx}, '${c.name}', this.value)" onchange="updateQtyCard(${idx})">
             <input type="text" inputmode="numeric" id="margin-pct-${idx}-${c.name.replace(/\s+/g,'-')}" style="font-size:13px; font-weight:800; width:30px; text-align:center; border:none; border-bottom:1px solid var(--purple); color:var(--purple); outline:none; background:transparent;" value="${Number(s.cs.margin).toFixed(0)}" onblur="onColorMarginManual(${idx}, '${c.name}', this.value)" onkeyup="if(event.key==='Enter') this.blur();">
             <span style="font-size:13px; font-weight:800; color:var(--purple);">%</span>
           </div>
         </div>
-        <div style="flex:1;">
-          <div style="font-size:11px; font-weight:700; color:var(--green); margin-bottom:4px;">
-             <span>Valor de venda final</span>
+        <div style="flex:1; min-width:0;">
+          <div style="font-size:11px; font-weight:700; color:var(--green); margin-bottom:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+             <span>Venda final</span>
           </div>
-          <input type="text" inputmode="decimal" id="price-in-${idx}-${c.name.replace(/\s+/g,'-')}" class="field-input opt" style="width:100%; padding:8px; font-size:14px; font-weight:700; color:var(--green); border-color:var(--green); border-width:2px;" value="${fmtIn(s.prS)}" onblur="onColorPriceBlur(${idx}, '${c.name}', this.value)">
+          <input type="text" inputmode="decimal" id="price-in-${idx}-${c.name.replace(/\s+/g,'-')}" class="field-input opt" style="width:100%; padding:8px 4px; font-size:14px; font-weight:700; color:var(--green); border-color:var(--green); border-width:2px; text-align:center;" value="${fmtIn(s.prS)}" onblur="onColorPriceBlur(${idx}, '${c.name}', this.value)">
         </div>
-        <div style="width:110px;">
-          <div style="font-size:12px; font-weight:600; color:var(--amber); margin-bottom:4px; display:flex; justify-content:space-between; align-items:center; gap:6px;">
-            <span>Cadastrado <span style="font-size:10px; background:#fef9c3; color:#854d0e; padding:1px 5px; border-radius:10px;">+${pctAcimaCadastrado}%</span></span>
-            ${s.cs.manualAdPrice != null ? `<span style="font-size:10px; color:var(--text-secondary); cursor:pointer; text-decoration:underline;" onclick="resetColorAd(${idx}, '${c.name}')">Limpar</span>` : ''}
+        <div style="flex:1; min-width:0;">
+          <div style="font-size:11px; font-weight:600; color:var(--amber); margin-bottom:4px; display:flex; justify-content:space-between; align-items:center; gap:4px; white-space:nowrap; overflow:hidden;">
+            <span>Cad. <span style="font-size:9px; background:#fef9c3; color:#854d0e; padding:1px 3px; border-radius:10px;">+${pctAcimaCadastrado}%</span></span>
           </div>
-          <input type="text" inputmode="decimal" class="field-input opt" style="width:110px; padding:8px; font-size:14px; font-weight:700; color:var(--amber-text); border-color:var(--amber);" value="${fmtIn(s.anuncioVal)}" onblur="onColorAdBlur(${idx}, '${c.name}', this.value)">
+          <input type="text" inputmode="decimal" class="field-input opt" style="width:100%; padding:8px 4px; font-size:14px; font-weight:700; color:var(--amber-text); border-color:var(--amber); text-align:center;" value="${fmtIn(s.anuncioVal)}" onblur="onColorAdBlur(${idx}, '${c.name}', this.value)">
         </div>
       </div>
     </div>`;
