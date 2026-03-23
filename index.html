@@ -1076,7 +1076,6 @@ function toggleColor(name, priceKg, isChecked) {
   if (rowsDiv) rowsDiv.innerHTML = buildColorEditRowsHTML(currentProduct);
   else renderCostSection();
   renderAllQtyCards();
-  updateAllQtyCards();
 }
 
 function newProduct() {
@@ -1110,6 +1109,15 @@ function renderEditor() {
   renderProductList();
   renderCostSection();
   renderQtySection();
+}
+
+function applyBulkWeight() {
+  const val = parseBR(document.getElementById('bulk-weight').value);
+  if (!val || val <= 0) return;
+  currentProduct.selectedColors.forEach(c => {
+    c.grams = val;
+  });
+  renderCostSection();
 }
 
 function buildColorEditRowsHTML(p) {
@@ -1214,6 +1222,15 @@ function renderCostSection() {
             <input type="text" inputmode="numeric" id="max-qty" class="field-input req" style="margin:0; text-align:center;" value="${p.maxQuantities || 5}" oninput="onMaxQty(this.value)" placeholder="1 a 15">
           </div>
         </div>
+        <div id="bulk-tools-container">
+          ${p.selectedColors.length > 1 ? `
+            <div style="display:flex; align-items:center; justify-content:flex-end; gap:8px; margin-bottom:10px; padding-right:180px;">
+              <div style="font-size:10px; font-weight:800; color:var(--purple); text-transform:uppercase; opacity:0.8;">Peso em Massa (g):</div>
+              <input type="text" id="bulk-weight" placeholder="0" style="width:50px; padding:4px 6px; border:1.5px solid var(--purple); border-radius:4px; font-size:12px; font-weight:700; color:var(--purple); outline:none; text-align:center; background:var(--purple-light);">
+              <button onclick="applyBulkWeight()" style="padding:4px 10px; font-size:10px; font-weight:800; background:var(--purple); color:white; border:none; border-radius:4px; cursor:pointer; text-transform:uppercase;">Aplicar Tudo</button>
+            </div>
+          ` : ''}
+        </div>
         <div id="color-edit-rows">${colorEditRowsHTML}</div>
       </div>
 
@@ -1307,6 +1324,7 @@ function renderAllQtyCards() {
     div.innerHTML = buildQtyCard(i, currentProduct.quantities[i]);
     container.appendChild(div);
   }
+  updateAllQtyCards();
 }
 
 function getCS(q, cName) {
@@ -1563,7 +1581,7 @@ function onFilType(v)    { currentProduct.filamentType = v; }
 function onFilPrice(v)   { currentProduct.filamentPriceKg = parseBR(v); updateCostCalcs(); }
 function onFilGrams(v)   { currentProduct.filamentGrams = parseBR(v); updateCostCalcs(); }
 function onEnergy(v)     { currentProduct.energyCost = parseBR(v); updateCostCalcs(); }
-function onUseTape(v)    { currentProduct.useTape = v; updateCostCalcs(); renderCostSection(); }
+function onUseTape(v)    { currentProduct.useTape = v; renderCostSection(); }
 function onTax(v)        { currentProduct.taxPct = parseBR(v); updateCostCalcs(); }
 function onTapeRollPrice(v) { currentProduct.tapeRollPrice = parseBR(v); updateCostCalcs(); }
 function onTapeRollM(v)     { currentProduct.tapeRollM = parseBR(v); updateCostCalcs(); }
@@ -1590,14 +1608,12 @@ function onAccCost(i, v) { if (currentProduct.accessories[i]) { currentProduct.a
 function removeAcc(i) {
   currentProduct.accessories.splice(i, 1);
   renderCostSection();
-  renderAllQtyCards();
 }
 
 function onColors(v) { currentProduct.availableColors = v; }
 function onMaxQty(v) {
   currentProduct.maxQuantities = parseInt(v) || 5;
   renderAllQtyCards();
-  updateAllQtyCards();
 }
 
 // ---- EVENT HANDLERS: QTY ----
