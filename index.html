@@ -705,11 +705,25 @@ function defaultProduct(title = 'Novo Produto') {
 
 // ---- CALCULATOR ----
 function calcCostPerUnit(p) {
-  const filament = (p.filamentPriceKg / 1000) * p.filamentGrams;
-  const energy   = parseFloat(p.energyCost) || 0;
-  const tape     = (p.useTape !== false && p.tapeRollM > 0) ? (p.tapeRollPrice / (p.tapeRollM * 100)) * p.tapeCmUnit : 0;
-  const acc      = (p.accessories || []).reduce((s, a) => s + (parseFloat(a.cost) || 0), 0);
-  return filament + energy + tape + acc + (parseFloat(p.packagingCost) || 0) + (parseFloat(p.adsCost) || 0);
+  // When colors are selected, use the average filament cost across all selected colors
+  let filament;
+  if (p.selectedColors && p.selectedColors.length > 0) {
+    const total = p.selectedColors.reduce((sum, c) => {
+      const grams = c.grams != null ? c.grams : p.filamentGrams;
+      const priceKg = c.priceKg || p.filamentPriceKg;
+      return sum + (priceKg / 1000) * grams;
+    }, 0);
+    filament = total / p.selectedColors.length;
+  } else {
+    filament = (p.filamentPriceKg / 1000) * p.filamentGrams;
+  }
+  const energy      = parseFloat(p.energyCost) || 0;
+  const printBase   = filament + energy;
+  const failurePct  = parseFloat(p.failurePct) || 0;
+  const failureCost = printBase * (failurePct / 100);
+  const tape        = (p.useTape !== false && p.tapeRollM > 0) ? (p.tapeRollPrice / (p.tapeRollM * 100)) * p.tapeCmUnit : 0;
+  const acc         = (p.accessories || []).reduce((s, a) => s + (parseFloat(a.cost) || 0), 0);
+  return printBase + failureCost + tape + acc + (parseFloat(p.packagingCost) || 0) + (parseFloat(p.adsCost) || 0);
 }
 
 function priceFromMargin(totalCost, margin, p) {
@@ -1357,8 +1371,8 @@ function renderCostSection() {
       </div>
 
       <div class="cost-group">
-        <div class="cost-group-header"><span class="cost-group-label" style="font-size:14px; font-weight:800; color:var(--purple); text-transform:uppercase;">Custos Logísticos Globais</span></div>
-        <div class="fields-row" style="grid-template-columns: repeat(3, 1fr);">
+        <div class="cost-group-header"><span class="cost-group-label" style="font-size:14px; font-weight:800; color:var(--purple);">Custos extra</span></div>
+        <div class="fields-row" style="grid-template-columns: repeat(4, 1fr);">
           <div class="field-group">
             <label style="margin-bottom:2px; font-weight:700;">Imposto (%)</label>
             ${taxSelectHTML}
@@ -1370,15 +1384,20 @@ function renderCostSection() {
             <input type="text" inputmode="decimal" id="packaging" class="field-input req" style="margin-top:4px;" value="${valBR(pkgAutoVal)}" oninput="onPackaging(this.value)">
           </div>
           <div class="field-group">
-            <label style="margin-bottom:2px; font-weight:700;">📢 Ads</label>
+            <label style="margin-bottom:2px; font-weight:700;">&#128226; Ads</label>
             <div style="height:17px;"></div>
             <input type="text" inputmode="decimal" id="ads-cost" class="field-input opt" style="margin-top:4px;" value="${valBR(p.adsCost)}" oninput="onAds(this.value)">
+          </div>
+          <div class="field-group">
+            <label style="margin-bottom:2px; font-weight:700;" title="% aplicada sobre o custo de impressão (filamento + energia) para cobrir falhas de impressão">&#9888;&#65039; Falhas/Fugas (%)</label>
+            <div style="height:17px;"></div>
+            <input type="text" inputmode="decimal" id="failure-pct" class="field-input opt" style="margin-top:4px;" placeholder="Ex: 5" value="${valBR(p.failurePct)}" oninput="onFailure(this.value)">
           </div>
         </div>
       </div>
 
       <div class="total-cost-bar">
-        <span>Custo Padrão por Unidade</span>
+        <span>Custo Médio por Unidade</span>
         <span id="glb-cpu-display">${fmt(cpu)}</span>
       </div>
     </div>
@@ -1425,7 +1444,10 @@ function getCS(q, cName) {
 function calcColorCost(p, c) {
   const grams    = c.grams != null ? c.grams : p.filamentGrams;
   const energy   = c.energyCost != null ? c.energyCost : (parseFloat(p.energyCost)||0);
-  const cFilCost = ((c.priceKg / 1000) * grams) + energy;
+  const cPrint   = ((c.priceKg / 1000) * grams) + energy;
+  const failurePct = parseFloat(p.failurePct) || 0;
+  const cFail    = cPrint * (failurePct / 100);
+  const cFilCost = cPrint + cFail;
   const cTape    = (p.useTape !== false && p.tapeRollM > 0) ? (p.tapeRollPrice / (p.tapeRollM * 100)) * p.tapeCmUnit : 0;
   const cAcc     = (p.accessories || []).reduce((s, a) => s + (parseFloat(a.cost) || 0), 0);
   return cFilCost + cTape + cAcc + (parseFloat(p.packagingCost) || 0) + (parseFloat(p.adsCost) || 0);
@@ -1434,7 +1456,10 @@ function calcColorCost(p, c) {
 function calcColorStats(p, q, c) {
   const grams    = c.grams != null ? c.grams : p.filamentGrams;
   const energy   = c.energyCost != null ? c.energyCost : (parseFloat(p.energyCost)||0);
-  const cFilCost = ((c.priceKg / 1000) * grams) + energy;
+  const cPrint   = ((c.priceKg / 1000) * grams) + energy;
+  const failurePct = parseFloat(p.failurePct) || 0;
+  const cFail    = cPrint * (failurePct / 100);
+  const cFilCost = cPrint + cFail;
   const cTape    = (p.useTape !== false && p.tapeRollM > 0) ? (p.tapeRollPrice / (p.tapeRollM * 100)) * p.tapeCmUnit : 0;
   const cAcc     = (p.accessories || []).reduce((s, a) => s + (parseFloat(a.cost) || 0), 0);
   const pPkg     = (parseFloat(p.packagingCost) || 0);
@@ -1468,7 +1493,10 @@ function createColorsTableHtml(p, q, idx) {
     <div style="background:#f9fafb; border:1px solid var(--border); border-radius:6px; padding:10px;">
       <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px dashed #d1d5db; padding-bottom:6px; margin-bottom:8px;">
         <div style="font-weight:700; font-size:13px; color:var(--text-primary); text-transform:uppercase;">${c.name}</div>
-        <div style="font-size:14px; font-weight:800; color:var(--purple);">Lucro: ${fmt(s.res.profit)}</div>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span style="font-size:12px; background:#fff1e6; color:#a4470a; padding:2px 8px; border-radius:20px; font-weight:800; border:1px solid #fed7aa;">Custo da impressão: ${fmt(s.cFilCost * q.qty)}</span>
+          <div style="font-size:14px; font-weight:800; color:var(--purple);">Lucro: ${fmt(s.res.profit)}</div>
+        </div>
       </div>
 
 
@@ -1547,7 +1575,7 @@ function buildQtyCard(idx, q) {
 
         <div class="qty-stats">
           <div class="qty-stat">
-            <div class="qty-stat-label">Custo Padrão</div>
+            <div class="qty-stat-label">Custo Médio</div>
             <div class="qty-stat-value" id="stat-cost-${idx}">0,00</div>
           </div>
           <div class="qty-stat">
@@ -1681,6 +1709,7 @@ function onTapeCmUnit(v)    { currentProduct.tapeCmUnit = parseBR(v); updateCost
 function onTape()           { onTapeRollPrice(el('tape-roll-price').value); }
 function onPackaging(v)  { currentProduct.packagingCost = parseBR(v); updateCostCalcs(); }
 function onAds(v)        { currentProduct.adsCost = parseBR(v); updateCostCalcs(); }
+function onFailure(v)    { currentProduct.failurePct = parseBR(v); updateCostCalcs(); }
 
 function addAcc() {
   currentProduct.accessories.push({ name: '', cost: 0 });
@@ -1783,6 +1812,7 @@ function readFormIntoProduct() {
   if (el('tape-cm-unit'))    currentProduct.tapeCmUnit      = parseBR(el('tape-cm-unit').value);
   if (el('packaging'))       currentProduct.packagingCost   = parseBR(el('packaging').value);
   if (el('ads-cost'))        currentProduct.adsCost         = parseBR(el('ads-cost').value);
+  if (el('failure-pct'))     currentProduct.failurePct      = parseBR(el('failure-pct').value);
 }
 
 // ---- HELPERS ----
