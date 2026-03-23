@@ -1053,8 +1053,7 @@ function renderCostSection() {
         </div>
       </div>
 
-      <div class="cost-group">
-        <div class="total-cost-bar">
+      <div class="total-cost-bar">
         <span>Custo Total Unidade Padrão</span>
         <span id="glb-cpu-display">${fmt(cpu)}</span>
       </div>
@@ -1068,6 +1067,8 @@ function renderCostSection() {
   document.getElementById('main-content').innerHTML = costHTML;
   renderAllQtyCards();
 }
+
+function renderQtySection() {}
 
 // ---- QTY CARDS ----
 function renderAllQtyCards() {
@@ -1320,12 +1321,10 @@ function onFilGrams(v)   { currentProduct.filamentGrams = parseBR(v); updateCost
 function onEnergy(v)     { currentProduct.energyCost = parseBR(v); updateCostCalcs(); }
 function onUseTape(v)    { currentProduct.useTape = v; updateCostCalcs(); renderCostSection(); }
 function onTax(v)        { currentProduct.taxPct = parseBR(v); updateCostCalcs(); }
-function onTape()        {
-  currentProduct.tapeRollPrice = parseBR(el('tape-roll-price').value);
-  currentProduct.tapeRollM     = parseBR(el('tape-roll-m').value);
-  currentProduct.tapeCmUnit    = parseBR(el('tape-cm-unit').value);
-  updateCostCalcs();
-}
+function onTapeRollPrice(v) { currentProduct.tapeRollPrice = parseBR(v); updateCostCalcs(); }
+function onTapeRollM(v)     { currentProduct.tapeRollM = parseBR(v); updateCostCalcs(); }
+function onTapeCmUnit(v)    { currentProduct.tapeCmUnit = parseBR(v); updateCostCalcs(); }
+function onTape()           { onTapeRollPrice(el('tape-roll-price').value); }
 function onPackaging(v)  { currentProduct.packagingCost = parseBR(v); updateCostCalcs(); }
 function onAds(v)        { currentProduct.adsCost = parseBR(v); updateCostCalcs(); }
 
@@ -1364,6 +1363,18 @@ function onQtyNum(idx, v)   { currentProduct.quantities[idx].qty = parseInt(v) |
 function onMarginSlider(idx, v) {
   const margin = parseFloat(v);
   currentProduct.quantities[idx].margin = margin;
+  updateQtyCard(idx);
+}
+function onMargin(idx, v) { onMarginSlider(idx, v); }
+
+function onAdBlur(idx, raw) {
+  const q = currentProduct.quantities[idx];
+  if (!raw || raw.trim() === '' || parseBR(raw) <= 0) { q.manualAdPrice = null; }
+  else { q.manualAdPrice = parseBR(raw); }
+  updateQtyCard(idx);
+}
+function resetAd(idx) {
+  currentProduct.quantities[idx].manualAdPrice = null;
   updateQtyCard(idx);
 }
 
