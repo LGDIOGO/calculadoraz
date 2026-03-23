@@ -413,9 +413,17 @@
     <div class="sidebar-section">
       <div class="sidebar-section-label">Produtos</div>
     </div>
-    <div class="product-list" id="product-list">
+    <div class="product-list" id="product-list" style="flex: 1;">
       <div style="padding: 8px 10px; font-size: 12px; color: rgba(255, 255, 255, 0.7);">Carregando...</div>
     </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-section-label" style="display:flex; justify-content:space-between; align-items:center;">
+        <span>Cores Salvas</span>
+        <button onclick="newMaterial()" style="background:transparent;border:none;color:var(--green);cursor:pointer;font-weight:bold;font-size:16px;">+</button>
+      </div>
+    </div>
+    <div class="product-list" id="materials-list" style="flex: none; height: 160px; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 8px;"></div>
 
     <div class="sidebar-footer">
       <div class="user-info">
@@ -513,6 +521,7 @@ const ANUNCIO_STEP = 0.05;
 // ---- STATE ----
 let currentProduct = null;
 let products = [];
+let currentUserSettings = { materials: [] };
 let currentUser = null;
 let saveTimeout = null;
 
@@ -521,7 +530,9 @@ function defaultProduct(title = 'Novo Produto') {
   return {
     id: null,
     title,
-    filamentType: 'PLA',
+    availableColors: '',
+    maxQuantities: 5,
+    filamentType: '',
     filamentPriceKg: 0,
     filamentGrams: 0,
     energyCost: 0,
@@ -581,6 +592,7 @@ function fmt(v)      { return 'R$ ' + (isNaN(v) ? '0,00' : v.toFixed(2).replace(
 function fmtIn(v)    { return (isNaN(v) ? '0,00' : v.toFixed(2).replace('.',',')); }
 function fmtPct(v)   { return '+' + Math.round(v * 100) + '%'; }
 function parseBR(s)  { return parseFloat((s || '').toString().replace(',','.')) || 0; }
+function valBR(v)    { return v == null || v === 0 ? '' : v.toString().replace('.', ','); }
 
 // ---- COMP TAG ----
 function compTag(myPrice, compStr) {
@@ -613,13 +625,26 @@ function doLogout() {
   auth.signOut();
 }
 
-// ---- PRODUCTS CRUD ----
-function productsRef() {
-  return db.collection('users').doc(currentUser.uid).collection('products');
+// ---- DB & SETTINGS ----
+function productsRef() { return db.collection('users').doc(currentUser.uid).collection('products'); }
+function settingsRef() { return db.collection('users').doc(currentUser.uid).collection('settings').doc('global'); }
+
+async function loadSettings() {
+  if (!currentUser) return;
+  const doc = await settingsRef().get();
+  if (doc.exists) currentUserSettings = doc.data() || { materials: [] };
+  if (!currentUserSettings.materials) currentUserSettings.materials = [];
+  renderMaterialsSidebar();
+}
+
+async function saveSettings() {
+  if (!currentUser) return;
+  await settingsRef().set(currentUserSettings);
 }
 
 async function loadProducts() {
   if (!currentUser) return;
+  await loadSettings();
   const snap = await productsRef().orderBy('updatedAt','desc').get();
   products = snap.docs.map(d => ({ ...d.data(), id: d.id }));
   renderProductList();
@@ -680,6 +705,48 @@ function renderProductList() {
   `).join('');
 }
 
+function renderMaterialsSidebar() {
+  const el = document.getElementById('materials-list');
+  if (!currentUserSettings.materials.length) {
+    el.innerHTML = `<div style="padding: 8px 10px; font-size: 11px; color: rgba(255, 255, 255, 0.5);">Nenhuma cor salva</div>`;
+    return;
+  }
+  el.innerHTML = currentUserSettings.materials.map((m, i) => `
+    <div class="product-item" style="font-size: 12px; padding: 6px 10px;">
+      <span class="product-item-name" style="flex:1;">${m.name} <br><span style="font-size:10px; opacity:0.7;">R$ ${fmtIn(m.price)}/kg</span></span>
+      <button class="product-delete" onclick="deleteMaterial(${i}, event)" title="Excluir">×</button>
+    </div>
+  `).join('');
+  if (currentProduct) renderCostSection();
+}
+
+function newMaterial() {
+  const name = prompt('Nome/Cor do material (Ex: PLA Preto):');
+  if (!name) return;
+  const price = prompt('Preço por kg (Ex: 95,00):');
+  if (!price) return;
+  currentUserSettings.materials.push({ name, price: parseBR(price) });
+  saveSettings();
+  renderMaterialsSidebar();
+}
+
+function deleteMaterial(i, e) {
+  e.stopPropagation();
+  if (!confirm('Excluir esta cor salva?')) return;
+  currentUserSettings.materials.splice(i, 1);
+  saveSettings();
+  renderMaterialsSidebar();
+}
+
+function applyMaterial(i) {
+  if (i === "") return;
+  const m = currentUserSettings.materials[i];
+  currentProduct.filamentType = m.name;
+  currentProduct.filamentPriceKg = m.price;
+  updateCostCalcs();
+  renderCostSection();
+}
+
 function newProduct() {
   currentProduct = defaultProduct();
   renderEditor();
@@ -727,6 +794,22 @@ function renderCostSection() {
   const content = document.getElementById('main-content');
   content.innerHTML = `
     <div class="section">
+      <div class="section-title">Configurações do Anúncio</div>
+      <div class="cost-group" style="border-bottom:none; margin-bottom:0; padding-bottom:0;">
+        <div class="fields-row">
+          <div class="field-group" style="flex: 2; min-width: 200px;">
+            <label>Cores Disponíveis nas Variações</label>
+            <input type="text" id="available-colors" class="field-input" style="margin:0;" value="${p.availableColors || ''}" oninput="onColors(this.value)" placeholder="Ex: Preto, Branco, Transparente...">
+          </div>
+          <div class="field-group" style="flex: 1; min-width: 120px;">
+            <label>Nº de Variações na Tela</label>
+            <input type="text" inputmode="numeric" id="max-qty" class="field-input" style="margin:0; text-align: center;" value="${p.maxQuantities || 5}" oninput="onMaxQty(this.value)" placeholder="1 a 5">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
       <div class="section-title">Custos por Unidade</div>
 
       <div class="cost-group">
@@ -736,24 +819,27 @@ function renderCostSection() {
         </div>
         <div class="fields-row">
           <div class="field-group">
-            <label>Tipo</label>
-            <select id="fil-type" onchange="onFilType(this.value)">
-              <option ${p.filamentType==='PLA'?'selected':''}>PLA</option>
-              <option ${p.filamentType==='PETG'?'selected':''}>PETG</option>
-              <option ${p.filamentType==='ABS'?'selected':''}>ABS</option>
+            <label>Nome / Tipo</label>
+            <input type="text" id="fil-type" value="${p.filamentType || ''}" placeholder="PLA" oninput="onFilType(this.value)">
+          </div>
+          <div class="field-group">
+            <label>Carregar Cor Salva</label>
+            <select onchange="applyMaterial(this.value)" style="font-style:italic;">
+              <option value="">-- Suas Cores --</option>
+              ${(currentUserSettings?.materials || []).map((m, idx) => `<option value="${idx}">${m.name} (R$${fmtIn(m.price)})</option>`).join('')}
             </select>
           </div>
           <div class="field-group">
             <label>Preço/kg (R$)</label>
-            <input type="number" id="fil-price-kg" step="0.01" value="${p.filamentPriceKg || ''}" placeholder="0,00" oninput="onFilPrice(this.value)">
+            <input type="text" inputmode="decimal" id="fil-price-kg" value="${valBR(p.filamentPriceKg)}" placeholder="0,00" oninput="onFilPrice(this.value)">
           </div>
           <div class="field-group">
             <label>Gramas (g)</label>
-            <input type="number" id="fil-grams" step="0.1" value="${p.filamentGrams || ''}" placeholder="0" oninput="onFilGrams(this.value)">
+            <input type="text" inputmode="decimal" id="fil-grams" value="${valBR(p.filamentGrams)}" placeholder="0" oninput="onFilGrams(this.value)">
           </div>
           <div class="field-group">
             <label>Energia/peça (R$)</label>
-            <input type="number" id="energy-cost" step="0.01" value="${p.energyCost || ''}" placeholder="0,00" oninput="onEnergy(this.value)" style="font-style: italic;">
+            <input type="text" inputmode="decimal" id="energy-cost" value="${valBR(p.energyCost)}" placeholder="0,00" oninput="onEnergy(this.value)">
           </div>
         </div>
       </div>
@@ -771,15 +857,15 @@ function renderCostSection() {
         <div class="fields-row" id="tape-fields" style="${p.useTape !== false ? '' : 'display:none;'}">
           <div class="field-group">
             <label>Preço do rolo (R$)</label>
-            <input type="number" id="tape-roll-price" step="0.01" value="${p.tapeRollPrice}" oninput="onTape()">
+            <input type="text" inputmode="decimal" id="tape-roll-price" value="${valBR(p.tapeRollPrice)}" oninput="onTape()">
           </div>
           <div class="field-group">
             <label>Comprimento do rolo (m)</label>
-            <input type="number" id="tape-roll-m" step="0.1" value="${p.tapeRollM}" oninput="onTape()">
+            <input type="text" inputmode="decimal" id="tape-roll-m" value="${valBR(p.tapeRollM)}" oninput="onTape()">
           </div>
           <div class="field-group">
             <label>Uso por unidade (cm)</label>
-            <input type="number" id="tape-cm-unit" step="0.5" value="${p.tapeCmUnit}" oninput="onTape()">
+            <input type="text" inputmode="decimal" id="tape-cm-unit" value="${valBR(p.tapeCmUnit)}" oninput="onTape()">
           </div>
         </div>
       </div>
@@ -796,15 +882,15 @@ function renderCostSection() {
         <div class="fields-row">
           <div class="field-group">
             <label>📄 Imposto (%)</label>
-            <input type="number" id="tax-pct" step="0.1" value="${p.taxPct}" oninput="onTax(this.value)" style="font-style: italic;">
+            <input type="text" inputmode="decimal" id="tax-pct" value="${valBR(p.taxPct)}" oninput="onTax(this.value)" style="font-style: italic;">
           </div>
           <div class="field-group">
             <label>📦 Embalagem (R$)</label>
-            <input type="number" id="packaging" step="0.01" value="${p.packagingCost}" oninput="onPackaging(this.value)">
+            <input type="text" inputmode="decimal" id="packaging" value="${valBR(p.packagingCost)}" oninput="onPackaging(this.value)">
           </div>
           <div class="field-group">
-            <label>📢 Ads por unidade (R$)</label>
-            <input type="number" id="ads-cost" step="0.01" value="${p.adsCost}" oninput="onAds(this.value)">
+            <label>📢 Ads / un. (R$)</label>
+            <input type="text" inputmode="decimal" id="ads-cost" value="${valBR(p.adsCost)}" oninput="onAds(this.value)">
           </div>
         </div>
       </div>
@@ -828,9 +914,10 @@ function renderAllQtyCards() {
   const container = document.getElementById('qty-cards');
   if (!container) return;
   container.innerHTML = '';
-  currentProduct.quantities.forEach((q, i) => {
+  const max = Math.max(1, Math.min(5, parseInt(currentProduct.maxQuantities) || 5));
+  for (let i = 0; i < max && i < currentProduct.quantities.length; i++) {
     container.appendChild(buildQtyCard(i));
-  });
+  }
 }
 
 function buildQtyCard(idx) {
@@ -859,12 +946,11 @@ function buildQtyCard(idx) {
     <div class="qty-card-header">
       <div class="qty-label-wrap">
         <input class="qty-label-input" value="${q.label}" placeholder="Nome..." oninput="onQtyLabel(${idx}, this.value)" title="Clique para renomear">
-        <div class="qty-number-badge">×<input class="qty-number-input" type="number" min="1" value="${q.qty}" oninput="onQtyNum(${idx}, this.value)" title="Quantidade"></div>
+        <div class="qty-number-badge">×<input class="qty-number-input" type="text" inputmode="numeric" min="1" value="${q.qty}" oninput="onQtyNum(${idx}, this.value)" title="Quantidade"></div>
       </div>
       <div class="price-wrap">
         <span class="price-prefix">R$</span>
-        <input class="price-main-input" id="price-in-${idx}" value="${fmtIn(price)}"
-          onfocus="this.value=this.value.replace(',','.')"
+        <input class="price-main-input" type="text" inputmode="decimal" id="price-in-${idx}" value="${fmtIn(price)}"
           onblur="onPriceBlur(${idx}, this.value)"
           onkeydown="if(event.key==='Enter')this.blur()">
       </div>
@@ -878,7 +964,7 @@ function buildQtyCard(idx) {
       <div class="anuncio-price" style="display: flex; gap: 8px; align-items: center;">
         <div style="display: flex; align-items: center;">
           <span style="font-size: 16px; font-weight: 600; color: var(--amber-text);">R$</span>
-          <input type="number" id="anuncio-${idx}" value="${fmtIn(anuncioVal)}" onblur="onAnuncioBlur(${idx}, this.value)" style="width: 80px; background: transparent; border: none; border-bottom: 2px dashed #b45309; font-family: inherit; font-size: 18px; font-weight: 700; color: var(--amber-text); outline: none; text-align: right; font-style: italic;">
+          <input type="text" inputmode="decimal" id="anuncio-${idx}" value="${fmtIn(anuncioVal)}" onblur="onAnuncioBlur(${idx}, this.value)" style="width: 80px; background: transparent; border: none; border-bottom: 2px dashed #b45309; font-family: inherit; font-size: 18px; font-weight: 700; color: var(--amber-text); outline: none; text-align: right; font-style: italic;">
         </div>
         <button id="btn-reset-anuncio-${idx}" onclick="resetAnuncio(${idx})" style="background:transparent; border:none; color: var(--text-tertiary); cursor: pointer; font-size: 11px; text-decoration: underline; display: ${q.manualAdPrice != null ? 'block' : 'none'}; padding: 0;">Restaurar</button>
       </div>
@@ -1029,7 +1115,7 @@ function addAcc() {
   div.dataset.acc = idx;
   div.innerHTML = `
     <input type="text" class="field-input" style="flex:1;padding:7px 10px;margin:0;" placeholder="Ex: Parafuso M3" oninput="onAccName(${idx}, this.value)">
-    <input type="number" class="field-input acc-cost" style="margin:0;padding:7px 10px;" placeholder="R$" step="0.01" oninput="onAccCost(${idx}, this.value)">
+    <input type="text" inputmode="decimal" class="field-input acc-cost" style="margin:0;padding:7px 10px;" placeholder="R$" oninput="onAccCost(${idx}, this.value)">
     <button class="btn-icon" onclick="removeAcc(${idx})" title="Remover">×</button>`;
   container.appendChild(div);
 }
@@ -1039,6 +1125,13 @@ function removeAcc(i) {
   currentProduct.accessories.splice(i, 1);
   renderCostSection();
   renderAllQtyCards();
+}
+
+function onColors(v) { currentProduct.availableColors = v; }
+function onMaxQty(v) {
+  currentProduct.maxQuantities = parseInt(v) || 5;
+  renderAllQtyCards();
+  updateAllQtyCards();
 }
 
 // ---- EVENT HANDLERS: QTY ----
@@ -1076,6 +1169,8 @@ function onTitleChange() {
 // ---- READ FORM ----
 function readFormIntoProduct() {
   currentProduct.title = el('product-title').value;
+  if (el('available-colors')) currentProduct.availableColors = el('available-colors').value;
+  if (el('max-qty'))          currentProduct.maxQuantities   = parseInt(el('max-qty').value) || 5;
   if (el('fil-type'))        currentProduct.filamentType    = el('fil-type').value;
   if (el('fil-price-kg'))    currentProduct.filamentPriceKg = parseBR(el('fil-price-kg').value);
   if (el('fil-grams'))       currentProduct.filamentGrams   = parseBR(el('fil-grams').value);
