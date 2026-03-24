@@ -77,11 +77,21 @@
     .field-label { font-size: 13px; font-weight: 700; color: var(--text-secondary); margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.05em; }
     .field-input {
       width: 100%; padding: 10px 12px; border: 1.5px solid var(--border);
-      border-radius: var(--radius-sm); font-family: inherit; font-size: 15px;
-      outline: none; transition: border-color 0.15s; margin-bottom: 1rem;
-      font-style: italic;
+      border-radius: var(--radius-sm); font-family: inherit; font-size: 14px;
+      outline: none; transition: border-color 0.15s;
+      font-weight: 600; background: white;
     }
-    .field-input:focus { border-color: var(--green); }
+    .field-input:focus { border-color: var(--green); box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1); }
+    
+    .input-wrapper { position: relative; display: flex; align-items: center; width: 100%; }
+    .input-prefix, .input-suffix {
+      position: absolute; pointer-events: none; font-size: 11px; font-weight: 800;
+      color: #94a3b8; z-index: 5; text-transform: uppercase;
+    }
+    .input-prefix { left: 10px; }
+    .input-suffix { right: 10px; }
+    .input-wrapper.has-prefix .field-input { padding-left: 30px !important; }
+    .input-wrapper.has-suffix .field-input { padding-right: 25px !important; }
     .btn-primary {
       width: 100%; padding: 11px; background: var(--green); color: white;
       border: none; border-radius: var(--radius-sm); font-family: inherit;
@@ -757,6 +767,11 @@ function fmtPct(v)   { return '+' + Math.round(v * 100) + '%'; }
 function parseBR(s)  { return parseFloat((s || '').toString().replace(',','.')) || 0; }
 function valBR(v)    { return v == null || v === 0 ? '' : v.toString().replace('.', ','); }
 
+// ---- DECORATORS ----
+function wrapR$(h)   { return `<div class="input-wrapper has-prefix"><span class="input-prefix">R$</span>${h}</div>`; }
+function wrapPct(h)  { return `<div class="input-wrapper has-suffix">${h}<span class="input-suffix">%</span></div>`; }
+function wrapG(h)    { return `<div class="input-wrapper has-suffix">${h}<span class="input-suffix">g</span></div>`; }
+
 // ---- COMP TAG ----
 function compTag(myPrice, compStr) {
   const cv = parseBR(compStr);
@@ -1236,16 +1251,16 @@ function buildColorEditRowsHTML(p) {
         <input type="text" value="${c.name}" disabled style="width:100%; padding:8px 10px; font-size:14px; border:1px solid #d1d5db; border-radius:6px; background:#f3f4f6; color:#555; font-weight:600;">
       </div>
       <div style="flex:2; min-width:100px;">
-        <div style="font-size:10px; color:var(--text-secondary); margin-bottom:5px; font-weight:600; text-transform:uppercase;">Preço/kg (R$)</div>
-        <input type="text" inputmode="decimal" id="top-pkg-${c.name}" value="${fmtIn(editPriceKg)}" class="field-input req" style="padding:8px 10px; font-size:12px; margin:0;" oninput="onTopColorField('${c.name}')">
+        <div style="font-size:10px; color:var(--text-secondary); margin-bottom:5px; font-weight:600; text-transform:uppercase;">Preço/kg</div>
+        ${wrapR$(`<input type="text" inputmode="decimal" id="top-pkg-${c.name}" value="${fmtIn(editPriceKg)}" class="field-input req" style="padding:8px 10px; font-size:12px; margin:0;" oninput="onTopColorField('${c.name}')">`)}
       </div>
       <div style="flex:1; min-width:80px;">
-        <div style="font-size:10px; color:var(--text-secondary); margin-bottom:5px; font-weight:600; text-transform:uppercase;">Peso/un (g)</div>
-        <input type="text" inputmode="numeric" id="top-grm-${c.name}" value="${fmtIn(editGrams)}" class="field-input req" style="padding:8px 10px; font-size:12px; margin:0;" oninput="onTopColorField('${c.name}')">
+        <div style="font-size:10px; color:var(--text-secondary); margin-bottom:5px; font-weight:600; text-transform:uppercase;">Peso/un</div>
+        ${wrapG(`<input type="text" inputmode="numeric" id="top-grm-${c.name}" value="${fmtIn(editGrams)}" class="field-input req" style="padding:8px 10px; font-size:12px; margin:0;" oninput="onTopColorField('${c.name}')">`)}
       </div>
       <div style="flex:1; min-width:80px;">
-        <div style="font-size:10px; color:var(--text-secondary); margin-bottom:5px; font-weight:600; text-transform:uppercase;">Energia (R$)</div>
-        <input type="text" inputmode="decimal" id="top-nrg-${c.name}" value="${fmtIn(editEnergy)}" class="field-input opt" style="padding:8px 10px; font-size:12px; margin:0;" oninput="onTopColorField('${c.name}')">
+        <div style="font-size:10px; color:var(--text-secondary); margin-bottom:5px; font-weight:600; text-transform:uppercase;">Energia</div>
+        ${wrapR$(`<input type="text" inputmode="decimal" id="top-nrg-${c.name}" value="${fmtIn(editEnergy)}" class="field-input opt" style="padding:8px 10px; font-size:12px; margin:0;" oninput="onTopColorField('${c.name}')">`)}
       </div>
       <button onclick="saveTopColorMaterial('${c.name}')" style="padding:10px 14px; font-size:12px; font-weight:700; background:var(--green); color:#fff; border:none; border-radius:6px; cursor:pointer; white-space:nowrap; height:36px; display:flex; align-items:center; justify-content:center; gap:4px;">💾 Salvar</button>
     </div>`;
@@ -1262,7 +1277,7 @@ function renderCostSection() {
   const accHTML = (p.accessories || []).map((a, i) => `
     <div class="accessory-row" data-acc="${i}">
       <input type="text" class="field-input" style="flex:1;padding:7px 10px;margin:0;" placeholder="Ex: Parafuso M3" value="${a.name || ''}" oninput="onAccName(${i}, this.value)">
-      <input type="text" inputmode="decimal" class="field-input acc-cost" style="margin:0;padding:7px 10px;" placeholder="R$" value="${valBR(a.cost)}" oninput="onAccCost(${i}, this.value)">
+      ${wrapR$(`<input type="text" inputmode="decimal" class="field-input acc-cost" style="margin:0;padding:7px 10px;" placeholder="0,00" value="${valBR(a.cost)}" oninput="onAccCost(${i}, this.value)">`)}
       <button class="btn-icon" onclick="removeAcc(${i})" title="Remover">×</button>
     </div>`).join('');
 
@@ -1313,7 +1328,7 @@ function renderCostSection() {
       <div class="cost-group">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; gap:16px;">
           <div class="field-group" style="flex:3; margin:0;">
-            <label style="font-size:14px; font-weight:800; color:var(--purple);">Cores Disponíveis nas Variações</label>
+            <label style="font-size:14px; font-weight:800; color:var(--purple);">Cores Disponíveis</label>
             <div style="display:flex; flex-wrap:wrap; gap:8px; padding:6px 0;">
               ${coresHtml}
               ${coresHtml === '' ? '<span style="font-size:11px; color:var(--text-tertiary); font-style:italic;">Nenhuma cor salva na lateral.</span>' : ''}
@@ -1321,16 +1336,23 @@ function renderCostSection() {
             <input type="hidden" id="available-colors" value="${p.availableColors||''}">
           </div>
           <div class="field-group" style="flex:1; min-width:120px; margin:0; align-self:flex-start;">
-            <label>Nº de Variações</label>
-            <input type="text" inputmode="numeric" id="max-qty" class="field-input req" style="margin:0; text-align:center;" value="${p.maxQuantities || 5}" oninput="onMaxQty(this.value)" placeholder="1 a 15">
+            <label>Nº Variações</label>
+            <input type="text" inputmode="numeric" id="max-qty" class="field-input req" style="margin:0; text-align:center;" value="${p.maxQuantities || 5}" oninput="onMaxQty(this.value)" placeholder="1-15">
           </div>
         </div>
         <div id="bulk-tools-container">
           ${p.selectedColors.length > 1 ? `
-            <div style="display:flex; align-items:center; justify-content:flex-end; gap:8px; margin-bottom:10px; padding-right:180px;">
-              <div style="font-size:10px; font-weight:800; color:var(--purple); text-transform:uppercase; opacity:0.8;">Peso em Massa (g):</div>
-              <input type="text" id="bulk-weight" placeholder="0" style="width:50px; padding:4px 6px; border:1.5px solid var(--purple); border-radius:4px; font-size:12px; font-weight:700; color:var(--purple); outline:none; text-align:center; background:var(--purple-light);">
-              <button onclick="applyBulkWeight()" style="padding:4px 10px; font-size:10px; font-weight:800; background:var(--purple); color:white; border:none; border-radius:4px; cursor:pointer; text-transform:uppercase;">Aplicar Tudo</button>
+            <div style="display:flex; gap:8px; align-items:center; margin-bottom:8px;">
+              <div style="flex:2; min-width:140px;"></div>
+              <div style="flex:2; min-width:100px; text-align:right; font-size:10px; font-weight:800; color:var(--purple); text-transform:uppercase; opacity:0.8; padding-right:8px;">
+                peso/un em massa:
+              </div>
+              <div style="flex:1; min-width:80px; display:flex; gap:4px; align-items:center;">
+                ${wrapG(`<input type="text" id="bulk-weight" placeholder="0" style="flex:1; min-width:0; padding:6px 4px; border:2px solid var(--purple); border-radius:4px; font-size:12px; font-weight:700; color:var(--purple); outline:none; text-align:center; background:var(--purple-light);">`)}
+                <button onclick="applyBulkWeight()" style="padding:4px 8px; font-size:9px; font-weight:800; background:var(--purple); color:white; border:none; border-radius:4px; cursor:pointer; white-space:nowrap;">APLICAR</button>
+              </div>
+              <div style="flex:1; min-width:80px;"></div>
+              <div style="width:95px;"></div>
             </div>
           ` : ''}
         </div>
@@ -1347,23 +1369,23 @@ function renderCostSection() {
         </div>
         <div class="fields-row" id="tape-fields" style="display: ${p.useTape !== false ? 'grid' : 'none'};">
           <div class="field-group">
-            <label>Preço Rolo (R$)</label>
-            <input type="text" inputmode="decimal" id="tape-roll-price" class="field-input req" value="${valBR(p.tapeRollPrice)}" oninput="onTapeRollPrice(this.value)">
+            <label>Preço Rolo</label>
+            ${wrapR$(`<input type="text" inputmode="decimal" id="tape-roll-price" class="field-input req" value="${valBR(p.tapeRollPrice)}" oninput="onTapeRollPrice(this.value)">`)}
           </div>
           <div class="field-group">
             <label>Metros Rolo</label>
-            <input type="text" inputmode="numeric" id="tape-roll-m" class="field-input req" value="${p.tapeRollM || ''}" oninput="onTapeRollM(this.value)">
+            <div class="input-wrapper has-suffix"><input type="text" inputmode="numeric" id="tape-roll-m" class="field-input req" value="${p.tapeRollM || ''}" oninput="onTapeRollM(this.value)"><span class="input-suffix">m</span></div>
           </div>
           <div class="field-group">
             <label>Cm/Unidade</label>
-            <input type="text" inputmode="numeric" id="tape-cm-unit" class="field-input req" value="${p.tapeCmUnit || ''}" oninput="onTapeCmUnit(this.value)">
+            <div class="input-wrapper has-suffix"><input type="text" inputmode="numeric" id="tape-cm-unit" class="field-input req" value="${p.tapeCmUnit || ''}" oninput="onTapeCmUnit(this.value)"><span class="input-suffix">cm</span></div>
           </div>
         </div>
       </div>
 
       <div class="cost-group">
         <div class="cost-group-header">
-          <span class="cost-group-label" style="font-size:14px; font-weight:800; color:var(--purple);">Acessórios (Pés, Borrachas, Parafusos, etc)</span>
+          <span class="cost-group-label" style="font-size:14px; font-weight:800; color:var(--purple);">Acessórios</span>
           <span class="cost-calc" id="acc-calc-display">${fmt((p.accessories || []).reduce((s, a) => s + (parseFloat(a.cost) || 0), 0))}</span>
         </div>
         <div id="acc-list" style="margin-bottom:8px;">${accHTML}</div>
@@ -1374,17 +1396,17 @@ function renderCostSection() {
         <div class="cost-group-header"><span class="cost-group-label" style="font-size:14px; font-weight:800; color:var(--purple);">Custos extra</span></div>
         <div class="fields-row" style="grid-template-columns: repeat(4, 1fr);">
           <div class="field-group">
-            <label style="margin-bottom:2px; font-weight:700;">Imposto (%)</label>
+            <label style="margin-bottom:2px; font-weight:700;">Imposto</label>
             ${taxSelectHTML}
-            <input type="text" inputmode="decimal" id="tax-pct" class="field-input req" style="margin-top:4px;" value="${valBR(taxAutoVal)}" oninput="onTax(this.value)">
+            ${wrapPct(`<input type="text" inputmode="decimal" id="tax-pct" class="field-input req" style="margin-top:4px;" value="${valBR(taxAutoVal)}" oninput="onTax(this.value)">`)}
           </div>
           <div class="field-group">
-            <label style="margin-bottom:2px; font-weight:700;">Embalagem (R$)</label>
+            <label style="margin-bottom:2px; font-weight:700;">Embalagem</label>
             ${pkgSelectHTML}
-            <input type="text" inputmode="decimal" id="packaging" class="field-input req" style="margin-top:4px;" value="${valBR(pkgAutoVal)}" oninput="onPackaging(this.value)">
+            ${wrapR$(`<input type="text" inputmode="decimal" id="packaging" class="field-input req" style="margin-top:4px;" value="${valBR(pkgAutoVal)}" oninput="onPackaging(this.value)">`)}
           </div>
           <div class="field-group">
-            <label style="margin-bottom:2px; font-weight:700;">&#128226; Ads</label>
+            <label style="margin-bottom:2px; font-weight:700;">Ads</label>
             <div style="height:17px;"></div>
             <input type="text" inputmode="decimal" id="ads-cost" class="field-input opt" style="margin-top:4px;" value="${valBR(p.adsCost)}" oninput="onAds(this.value)">
           </div>
@@ -1468,7 +1490,14 @@ function calcColorStats(p, q, c) {
   const tcR      = cpuT * q.qty;
 
   const cs = getCS(q, c.name);
-  const prS = cs.manualPrice != null ? cs.manualPrice : priceFromMargin(tcR, cs.margin, p);
+  let prS;
+  if (cs.manualPrice != null) {
+    prS = cs.manualPrice;
+    // Recalcular a margem em tempo real se o preço for manual e os custos mudarem
+    cs.margin = marginFromPrice(tcR, prS, p);
+  } else {
+    prS = priceFromMargin(tcR, cs.margin, p);
+  }
   const res = calcFromPrice(tcR, prS, p);
   const autoAnuncio = prS * (1 + anuncioPct(q.qty - 1));
   const anuncioVal = cs.manualAdPrice != null ? cs.manualAdPrice : autoAnuncio;
@@ -1499,35 +1528,47 @@ function createColorsTableHtml(p, q, idx) {
         </div>
       </div>
 
-
       <div style="color:var(--text-secondary); margin-bottom:10px; display:flex; gap:6px; flex-wrap:wrap; line-height:1.4;">
         <span style="font-size:13px; background:#e5e7eb; padding:2px 6px; border-radius:4px; color:#111;">Custo Total da Qtd: <b>${fmt(s.tcR)}</b></span>
         <span style="font-size:11px;">Emb/Fita/Aces: ${fmt((s.pPkg+s.cTape+s.cAcc)*q.qty)} | Ads: ${fmt(s.pAds*q.qty)} | Imp: ${fmt(s.prS*(p.taxPct||0)/100)} | Taxas: ${fmt(s.res.fees)} </span>
       </div>
-      <div style="display:flex; gap:8px; align-items:center;">
-        <div style="flex:1.5; min-width:0;">
-          <div style="font-size:11px; font-weight:700; color:var(--text-tertiary); margin-bottom:4px;">Margem %</div>
-          <div style="display:flex; align-items:center; gap:2px;">
-            <input type="range" class="purple-slider" style="flex:1; min-width:0;" min="1" max="60" step="0.01" value="${s.cs.margin}" oninput="onColorMarginInput(${idx}, '${c.name}', this.value)" onchange="updateQtyCard(${idx})">
-            <input type="text" inputmode="numeric" id="margin-pct-${idx}-${c.name.replace(/\s+/g,'-')}" style="font-size:13px; font-weight:800; width:30px; text-align:center; border:none; border-bottom:1px solid var(--purple); color:var(--purple); outline:none; background:transparent;" value="${Number(s.cs.margin).toFixed(0)}" onblur="onColorMarginManual(${idx}, '${c.name}', this.value)" onkeyup="if(event.key==='Enter') this.blur();">
-            <span style="font-size:13px; font-weight:800; color:var(--purple);">%</span>
+      <div style="margin-bottom:8px;">
+        <div style="font-size:11px; font-weight:700; color:var(--text-tertiary); margin-bottom:4px;">Margem %</div>
+        <div style="display:flex; align-items:center; gap:6px;">
+          <input type="range" class="purple-slider" style="flex:1; min-width:0;" min="1" max="60" step="0.01" value="${s.cs.margin}" oninput="onColorMarginInput(${idx}, '${c.name}', this.value)" onchange="updateQtyCard(${idx})">
+          <div style="display:flex; align-items:center; gap:1px; min-width:48px; justify-content:flex-end;">
+            <input type="text" inputmode="numeric" id="margin-pct-${idx}-${c.name.replace(/\s+/g,'-')}" style="font-size:14px; font-weight:800; width:32px; text-align:right; border:none; border-bottom:2px solid var(--purple); color:var(--purple); outline:none; background:transparent;" value="${Number(s.cs.margin).toFixed(0)}" onblur="onColorMarginManual(${idx}, '${c.name}', this.value)" onkeyup="if(event.key==='Enter') this.blur();">
+            <span style="font-size:12px; font-weight:800; color:var(--purple);">%</span>
           </div>
         </div>
+      </div>
+      <div style="display:flex; gap:8px; align-items:flex-start;">
         <div style="flex:1; min-width:0;">
           <div style="font-size:11px; font-weight:700; color:var(--green); margin-bottom:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
              <span>Venda final</span>
           </div>
-          <input type="text" inputmode="decimal" id="price-in-${idx}-${c.name.replace(/\s+/g,'-')}" class="field-input opt" style="width:100%; padding:8px 4px; font-size:14px; font-weight:700; color:var(--green); border-color:var(--green); border-width:2px; text-align:center;" value="${fmtIn(s.prS)}" onblur="onColorPriceBlur(${idx}, '${c.name}', this.value)">
+          ${wrapR$(`<input type="text" inputmode="decimal" id="price-in-${idx}-${c.name.replace(/\s+/g,'-')}" class="field-input opt" style="width:100%; padding:8px 4px; font-size:14px; font-weight:700; color:var(--green); border-color:var(--green); border-width:2px; text-align:center;" value="${fmtIn(s.prS)}" oninput="onColorPriceInput(${idx}, '${c.name}', this.value)" onblur="onColorPriceBlur(${idx}, '${c.name}', this.value)">`)}
         </div>
         <div style="flex:1; min-width:0;">
           <div style="font-size:11px; font-weight:600; color:var(--amber); margin-bottom:4px; display:flex; justify-content:space-between; align-items:center; gap:4px; white-space:nowrap; overflow:hidden;">
-            <span>Cad. <span style="font-size:9px; background:#fef9c3; color:#854d0e; padding:1px 3px; border-radius:10px;">+${pctAcimaCadastrado}%</span></span>
+            <span>Cadastrado <span style="font-size:9px; background:#fef9c3; color:#854d0e; padding:1px 3px; border-radius:10px;">+${pctAcimaCadastrado}%</span></span>
           </div>
-          <input type="text" inputmode="decimal" class="field-input opt" style="width:100%; padding:8px 4px; font-size:14px; font-weight:700; color:var(--amber-text); border-color:var(--amber); text-align:center;" value="${fmtIn(s.anuncioVal)}" onblur="onColorAdBlur(${idx}, '${c.name}', this.value)">
+          ${wrapR$(`<input type="text" inputmode="decimal" class="field-input opt" style="width:100%; padding:8px 4px; font-size:14px; font-weight:700; color:var(--amber-text); border-color:var(--amber); text-align:center;" value="${fmtIn(s.anuncioVal)}" oninput="onColorAdInput(${idx}, '${c.name}', this.value)" onblur="onColorAdBlur(${idx}, '${c.name}', this.value)">`)}
         </div>
       </div>
     </div>`;
   });
+  html += `
+    <div style="display:flex; gap:8px; align-items:center; margin-top:4px; padding:10px; border-top:1px dashed var(--border);">
+       <div style="flex:1.5; min-width:0; text-align:right; font-size:10px; font-weight:800; color:var(--green); text-transform:uppercase; opacity:0.8; padding-right:8px;">
+         venda em massa:
+       </div>
+       <div style="flex:1; min-width:0; display:flex; gap:4px; align-items:center;">
+         ${wrapR$(`<input type="text" id="bulk-price-${idx}" placeholder="0,00" style="flex:1; min-width:0; padding:6px 4px; border:2px solid var(--green); border-radius:4px; font-size:13px; font-weight:700; color:var(--green); outline:none; text-align:center; background:var(--green-light);">`)}
+         <button onclick="applyBulkPrice(${idx})" style="padding:4px 8px; font-size:9px; font-weight:800; background:var(--green); color:white; border:none; border-radius:4px; cursor:pointer; white-space:nowrap;" title="Aplica este preço">APLICAR</button>
+       </div>
+       <div style="flex:1; min-width:0;"></div>
+    </div>`;
   html += `</div></div>`;
   return html;
 }
@@ -1543,13 +1584,13 @@ function buildQtyCard(idx, q) {
           <div class="qty-number-badge"><input type="text" inputmode="numeric" class="qty-number-input" value="${q.qty}" oninput="onQtyNum(${idx}, this.value)"> un</div>
           <input type="text" class="qty-label-input req" value="${q.label}" oninput="onQtyLabel(${idx}, this.value)">
         </div>
-        <div class="price-wrap" style="display:${displayMain};">
-          <span class="price-prefix">R$</span>
-          <input type="text" inputmode="decimal" class="price-main-input req" id="price-in-${idx}" value="0,00" onblur="onPriceBlur(${idx}, this.value)">
+        <div class="price-wrap" style="display:${displayMain}; flex:1; min-width:0;">
+          ${wrapR$(`<input type="text" inputmode="decimal" class="price-main-input req" id="price-in-${idx}" value="0,00" onblur="onPriceBlur(${idx}, this.value)">`)}
         </div>
       </div>
 
       <div id="colortable-${idx}"></div>
+
 
       <div id="main-qty-content-${idx}" style="display:${displayMain};">
         <div class="anuncio-box" style="display:flex; justify-content:space-between; align-items:center; background:var(--card-bg); border:1px solid #fcd34d; border-radius:8px; padding:12px; margin-bottom:12px;">
@@ -1558,7 +1599,7 @@ function buildQtyCard(idx, q) {
             <div class="anuncio-sub" style="font-size:10px; color:var(--text-tertiary);">Acréscimo ref ao número de unidades</div>
           </div>
           <div style="display:flex; flex-direction:column; align-items:flex-end; gap:4px;">
-             <input type="text" inputmode="decimal" class="price-main-input opt" id="anuncio-${idx}" style="color:var(--amber-text); border-bottom-color:var(--amber); width:90px; text-align:right; font-weight:800;" value="0,00" onblur="onAnuncioBlur(${idx}, this.value)">
+             ${wrapR$(`<input type="text" inputmode="decimal" class="price-main-input opt" id="anuncio-${idx}" style="color:var(--amber-text); border-bottom-color:var(--amber); width:90px; text-align:right; font-weight:800;" value="0,00" onblur="onAnuncioBlur(${idx}, this.value)">`)}
              <div id="anuncio-reset-${idx}" style="display:none;font-size:10px;color:var(--blue-text);cursor:pointer;text-decoration:underline;" onclick="resetAnuncio(${idx})">Restaurar Original</div>
           </div>
         </div>
@@ -1566,9 +1607,8 @@ function buildQtyCard(idx, q) {
         <div class="margin-row">
           <span class="margin-label">Margem Desejada:</span>
           <input type="range" id="margin-range-${idx}" min="1" max="60" step="0.01" value="${q.margin}" oninput="onMarginInput(${idx}, this.value)" onchange="updateQtyCard(${idx})">
-          <div style="display:flex; align-items:center;">
-             <input type="text" inputmode="numeric" id="margin-disp-${idx}" class="margin-display" style="width:30px; text-align:center; border:none; border-bottom:1px solid var(--text-primary); outline:none; background:transparent; font-size:14px; font-weight:800; padding:0; height:18px;" value="${Number(q.margin).toFixed(0)}" onblur="onMarginManual(${idx}, this.value)" onkeyup="if(event.key==='Enter') this.blur();">
-             <span class="margin-display" style="margin-left:2px;">%</span>
+          <div style="display:flex; align-items:center; min-width:45px;">
+             ${wrapPct(`<input type="text" inputmode="numeric" id="margin-disp-${idx}" class="margin-display" style="width:100%; text-align:center; border:none; border-bottom:1px solid var(--text-primary); outline:none; background:transparent; font-size:14px; font-weight:800; padding:0; height:18px;" value="${Number(q.margin).toFixed(0)}" onblur="onMarginManual(${idx}, this.value)" onkeyup="if(event.key==='Enter') this.blur();">`)}
           </div>
         </div>
 
@@ -1730,6 +1770,17 @@ function removeAcc(i) {
   renderCostSection();
 }
 
+function applyBulkPrice(idx) {
+  const val = parseBR(document.getElementById('bulk-price-' + idx).value);
+  if (!val || val < 0) return;
+  const q = currentProduct.quantities[idx];
+  currentProduct.selectedColors.forEach(c => {
+    const cs = getCS(q, c.name);
+    cs.manualPrice = val;
+  });
+  updateQtyCard(idx);
+}
+
 function onColors(v) { currentProduct.availableColors = v; }
 function onMaxQty(v) {
   currentProduct.maxQuantities = parseInt(v) || 5;
@@ -1780,7 +1831,8 @@ function onPriceBlur(idx, raw) {
   const price = parseBR(raw);
   const cpu   = calcCostPerUnit(currentProduct);
   const tc    = cpu * currentProduct.quantities[idx].qty;
-  if (price <= 0) { updateQtyCard(idx); return; }
+  if (price <= 0) { currentProduct.quantities[idx].manualPrice = null; updateQtyCard(idx); return; }
+  currentProduct.quantities[idx].manualPrice = price;
   const margin = Math.min(60, Math.max(1, marginFromPrice(tc, price, currentProduct)));
   currentProduct.quantities[idx].margin = margin;
   updateQtyCard(idx);
@@ -1844,6 +1896,10 @@ function onColorMarginInput(idx, cName, val) {
   const dispSpan = document.getElementById(`margin-pct-${idx}-${safeName}`);
   if (dispSpan) dispSpan.value = Math.round(cs.margin);
 
+  // Keep the range slider in sync
+  const slider = document.querySelector(`#qcard-${idx} input[type=range][oninput*="'${cName}'"]`);
+  if (slider) slider.value = cs.margin;
+
   const c = p.selectedColors.find(x => x.name === cName);
   const s = calcColorStats(p, q, c);
 
@@ -1893,6 +1949,37 @@ function onColorAdBlur(idx, cName, raw) {
   else { getCS(currentProduct.quantities[idx], cName).manualAdPrice = parseBR(raw); }
   updateQtyCard(idx);
 }
+// Live bidirectional sync: price input → slider + margin display
+function onColorPriceInput(idx, cName, raw) {
+  const price = parseBR(raw);
+  if (price <= 0) return;
+  const p = currentProduct;
+  const q = p.quantities[idx];
+  const c = p.selectedColors.find(x => x.name === cName);
+  if (!c) return;
+  const tcR = calcColorCost(p, c) * q.qty;
+  const margin = Math.min(80, Math.max(1, marginFromPrice(tcR, price, p)));
+  const cs = getCS(q, cName);
+  cs.manualPrice = price;
+  cs.margin = margin;
+
+  const safeName = cName.replace(/\s+/g, '-');
+  // Update slider position
+  const slider = document.querySelector(`#qcard-${idx} input[type=range][oninput*="'${cName}'"]`);
+  if (slider) slider.value = margin;
+  // Update margin % text
+  const marginDisp = document.getElementById(`margin-pct-${idx}-${safeName}`);
+  if (marginDisp) marginDisp.value = Math.round(margin);
+}
+
+// Live ad price input (lightweight, no re-render)
+function onColorAdInput(idx, cName, raw) {
+  const val = parseBR(raw);
+  if (val > 0) {
+    getCS(currentProduct.quantities[idx], cName).manualAdPrice = val;
+  }
+}
+
 function resetColorAd(idx, cName) {
   getCS(currentProduct.quantities[idx], cName).manualAdPrice = null;
   updateQtyCard(idx);
