@@ -335,7 +335,10 @@
     .qty-cards-grid { display: flex; flex-direction: column; gap: 12px; }
     .qty-card { background: white; border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem; }
 
-    .qty-card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; gap: 8px; flex-wrap: wrap; }
+    .qty-card-header { display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid var(--border); padding-bottom: 12px; margin-bottom: 12px; transition: background 0.2s; flex-wrap: wrap; }
+.qty-card-header:hover { background: #f8fafc; }
+.qty-card.collapsed .qty-card-header { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+.qty-card-content { transition: all 0.2s ease-in-out; }
     .qty-label-wrap { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; }
     .qty-label-input {
       font-family: inherit; font-size: 13px; font-weight: 600; color: var(--text-primary);
@@ -346,11 +349,11 @@
     .qty-label-input:focus { border-bottom-color: var(--green); }
     .qty-number-badge {
       display: flex; align-items: center; gap: 4px;
-      background: #dbeafe; color: #1d4ed8; padding: 2px 8px;
-      border-radius: 20px; font-size: 11px; font-weight: 600;
+      background: var(--purple-light); color: var(--purple); padding: 2px 10px;
+      border-radius: 20px; font-size: 11px; font-weight: 700;
     }
     .qty-number-input {
-      font-family: inherit; font-size: 11px; font-weight: 700; color: #1d4ed8;
+      font-family: inherit; font-size: 11px; font-weight: 800; color: var(--purple);
       border: none; outline: none; background: transparent; width: 24px; text-align: center;
       font-style: italic;
     }
@@ -571,7 +574,7 @@
         </div>
         <div id="taxes-container">
           <div class="config-list" id="taxes-list"></div>
-          <div style="padding: 0 0.75rem 0.5rem;"><button onclick="newTax()" style="background:transparent;border:none;color:var(--green);cursor:pointer;font-size:12px; font-weight:700;">+ Novo Imp.</button></div>
+          <div style="padding: 0 0.75rem 0.5rem;"><button onclick="newTax()" style="background:transparent;border:none;color:var(--green);cursor:pointer;font-size:12px; font-weight:700;">+ Novo Imposto</button></div>
         </div>
       </div>
     </div>
@@ -671,8 +674,8 @@ const auth = NEEDS_SETUP ? null : firebase.auth();
 const db   = NEEDS_SETUP ? null : firebase.firestore();
 
 // ---- CONSTANTS ----
-const FEE_PCT   = 0.25; // 20% comissão + 5% simples
-const FEE_FIXED = 4.00;
+const FEE_PCT   = 0.20; // 20% comissão Shopee
+const FEE_FIXED = 4.00; // taxa fixa Shopee (quando preço >= R$8)
 const ANUNCIO_BASE = 0.15;
 const ANUNCIO_STEP = 0.05;
 
@@ -704,11 +707,11 @@ function defaultProduct(title = 'Novo Produto') {
     packagingCost: 0.30,
     adsCost: 0,
     quantities: [
-      { label: '1 unidade',   qty: 1, margin: 20, comps: ['','',''] },
-      { label: '2 unidades',  qty: 2, margin: 20, comps: ['','',''] },
-      { label: '3 unidades',  qty: 3, margin: 20, comps: ['','',''] },
-      { label: '4 unidades',  qty: 4, margin: 20, comps: ['','',''] },
-      { label: '5 unidades',  qty: 5, margin: 20, comps: ['','',''] },
+      { label: '1 unidade',   qty: 1, margin: 20, comps: ['','',''], collapsed: true },
+      { label: '2 unidades',  qty: 2, margin: 20, comps: ['','',''], collapsed: true },
+      { label: '3 unidades',  qty: 3, margin: 20, comps: ['','',''], collapsed: true },
+      { label: '4 unidades',  qty: 4, margin: 20, comps: ['','',''], collapsed: true },
+      { label: '5 unidades',  qty: 5, margin: 20, comps: ['','',''], collapsed: true },
     ]
   };
 }
@@ -738,22 +741,39 @@ function calcCostPerUnit(p) {
 
 function priceFromMargin(totalCost, margin, p) {
   const t = (p && p.taxPct ? parseFloat(p.taxPct) : 0) / 100;
-  const d = 1 - FEE_PCT - t - margin / 100;
-  if (d <= 0) return 0;
-  return (totalCost + FEE_FIXED) / d;
+  // Tenta primeiro com preço >= R$8 (20% + R$4 fixo)
+  const d1 = 1 - FEE_PCT - t - margin / 100;
+  if (d1 > 0) {
+    const price1 = (totalCost + FEE_FIXED) / d1;
+    if (price1 >= 8) return price1;
+  }
+  // Preço < R$8: Shopee cobra 50% do valor de venda
+  const d2 = 0.50 - t - margin / 100;
+  if (d2 <= 0) return 0;
+  return totalCost / d2;
 }
 
 function marginFromPrice(totalCost, price, p) {
   if (price <= 0) return 0;
   const t = (p && p.taxPct ? parseFloat(p.taxPct) : 0) / 100;
-  const fees   = price * (FEE_PCT + t) + FEE_FIXED;
+  let fees;
+  if (price >= 8) {
+    fees = price * (FEE_PCT + t) + FEE_FIXED;
+  } else {
+    fees = price * (0.50 + t); // Shopee 50% para itens < R$8
+  }
   const profit = price - fees - totalCost;
   return (profit / price) * 100;
 }
 
 function calcFromPrice(totalCost, price, p) {
   const t = (p && p.taxPct ? parseFloat(p.taxPct) : 0) / 100;
-  const fees   = price * (FEE_PCT + t) + FEE_FIXED;
+  let fees;
+  if (price >= 8) {
+    fees = price * (FEE_PCT + t) + FEE_FIXED;
+  } else {
+    fees = price * (0.50 + t); // Shopee 50% para itens < R$8
+  }
   const profit = price - fees - totalCost;
   return { fees, profit, margin: (profit / price) * 100 };
 }
@@ -1411,15 +1431,15 @@ function renderCostSection() {
             <input type="text" inputmode="decimal" id="ads-cost" class="field-input opt" style="margin-top:4px;" value="${valBR(p.adsCost)}" oninput="onAds(this.value)">
           </div>
           <div class="field-group">
-            <label style="margin-bottom:2px; font-weight:700;" title="% aplicada sobre o custo de impressão (filamento + energia) para cobrir falhas de impressão">Falhas/Fugas (%)</label>
+            <label style="margin-bottom:2px; font-weight:700;" title="% aplicada sobre o custo de impressão (filamento + energia) para cobrir falhas de impressão">Falhas/Fugas</label>
             <div style="height:17px;"></div>
-            <input type="text" inputmode="decimal" id="failure-pct" class="field-input opt" style="margin-top:4px;" placeholder="Ex: 5" value="${valBR(p.failurePct)}" oninput="onFailure(this.value)">
+            ${wrapPct(`<input type="text" inputmode="decimal" id="failure-pct" class="field-input opt" style="margin-top:4px;" placeholder="Ex: 5" value="${valBR(p.failurePct)}" oninput="onFailure(this.value)">`)}
           </div>
         </div>
       </div>
 
       <div class="total-cost-bar">
-        <span>Custo Médio por Unidade</span>
+        <span>Custo  Médio  por  Unidade</span>
         <span id="glb-cpu-display">${fmt(cpu)}</span>
       </div>
     </div>
@@ -1445,8 +1465,13 @@ function renderAllQtyCards() {
   while (currentProduct.quantities.length < max) {
     const nextQ = currentProduct.quantities.length + 1;
     const lbl = nextQ === 1 ? '1 unidade' : nextQ + ' unidades';
-    currentProduct.quantities.push({ label: lbl, qty: nextQ, margin: 20, comps: ['','',''] });
+    currentProduct.quantities.push({ label: lbl, qty: nextQ, margin: 20, comps: ['','',''], collapsed: true });
   }
+
+  // Ensure all quantities have a collapsed property
+  currentProduct.quantities.forEach((q, i) => {
+    if (q.collapsed === undefined) q.collapsed = true;
+  });
 
   for (let i = 0; i < max; i++) {
     const div = document.createElement('div');
@@ -1530,7 +1555,7 @@ function createColorsTableHtml(p, q, idx) {
 
       <div style="color:var(--text-secondary); margin-bottom:10px; display:flex; gap:6px; flex-wrap:wrap; line-height:1.4;">
         <span style="font-size:13px; background:#e5e7eb; padding:2px 6px; border-radius:4px; color:#111;">Custo Total da Qtd: <b>${fmt(s.tcR)}</b></span>
-        <span style="font-size:11px;">Emb/Fita/Aces: ${fmt((s.pPkg+s.cTape+s.cAcc)*q.qty)} | Ads: ${fmt(s.pAds*q.qty)} | Imp: ${fmt(s.prS*(p.taxPct||0)/100)} | Taxas: ${fmt(s.res.fees)} </span>
+        <span style="font-size:11px;">Emb/Fita/Aces: ${fmt((s.pPkg+s.cTape+s.cAcc)*q.qty)} | Ads: ${fmt(s.pAds*q.qty)} | Shopee: ${fmt(s.prS >= 8 ? s.prS * FEE_PCT + FEE_FIXED : s.prS * 0.50)} | Imposto: ${fmt(s.prS*(p.taxPct||0)/100)} </span>
       </div>
       <div style="margin-bottom:8px;">
         <div style="font-size:11px; font-weight:700; color:var(--text-tertiary); margin-bottom:4px;">Margem %</div>
@@ -1551,9 +1576,9 @@ function createColorsTableHtml(p, q, idx) {
         </div>
         <div style="flex:1; min-width:0;">
           <div style="font-size:11px; font-weight:600; color:var(--amber); margin-bottom:4px; display:flex; justify-content:space-between; align-items:center; gap:4px; white-space:nowrap; overflow:hidden;">
-            <span>Cadastrado <span style="font-size:9px; background:#fef9c3; color:#854d0e; padding:1px 3px; border-radius:10px;">+${pctAcimaCadastrado}%</span></span>
+            <span>Cadastrado <span id="ad-badge-${idx}-${c.name.replace(/\s+/g,'-')}" style="font-size:9px; background:#fef9c3; color:#854d0e; padding:1px 3px; border-radius:10px;">+${pctAcimaCadastrado}%</span></span>
           </div>
-          ${wrapR$(`<input type="text" inputmode="decimal" class="field-input opt" style="width:100%; padding:8px 4px; font-size:14px; font-weight:700; color:var(--amber-text); border-color:var(--amber); text-align:center;" value="${fmtIn(s.anuncioVal)}" oninput="onColorAdInput(${idx}, '${c.name}', this.value)" onblur="onColorAdBlur(${idx}, '${c.name}', this.value)">`)}
+          ${wrapR$(`<input type="text" inputmode="decimal" id="ad-in-${idx}-${c.name.replace(/\s+/g,'-')}" class="field-input opt" style="width:100%; padding:8px 4px; font-size:14px; font-weight:700; color:var(--amber-text); border-color:var(--amber); text-align:center;" value="${fmtIn(s.anuncioVal)}" oninput="onColorAdInput(${idx}, '${c.name}', this.value)" onblur="onColorAdBlur(${idx}, '${c.name}', this.value)">`)}
         </div>
       </div>
     </div>`;
@@ -1576,76 +1601,78 @@ function createColorsTableHtml(p, q, idx) {
 function buildQtyCard(idx, q) {
   const isMultiColor = currentProduct.selectedColors && currentProduct.selectedColors.length > 0;
   const displayMain = isMultiColor ? 'none' : 'block';
+  const isCollapsed = q.collapsed === true;
 
   return `
-    <div class="qty-card" id="qcard-${idx}">
-      <div class="qty-card-header">
-        <div class="qty-label-wrap">
-          <div class="qty-number-badge"><input type="text" inputmode="numeric" class="qty-number-input" value="${q.qty}" oninput="onQtyNum(${idx}, this.value)"> un</div>
-          <input type="text" class="qty-label-input req" value="${q.label}" oninput="onQtyLabel(${idx}, this.value)">
+    <div class="qty-card ${isCollapsed ? 'collapsed' : ''}" id="qcard-${idx}">
+      <div class="qty-card-header" onclick="toggleQtyCard(${idx})" style="cursor:pointer; user-select:none; display:flex; align-items:center; justify-content:space-between; gap:12px;">
+        <div class="qty-label-wrap" style="display:flex; align-items:center; gap:8px;">
+          <div class="qty-number-badge"><input type="text" inputmode="numeric" class="qty-number-input" value="${q.qty}" oninput="onQtyNum(${idx}, this.value)" onclick="event.stopPropagation()"> un</div>
+          <svg style="width:16px; height:16px; transition:transform 0.2s; transform:rotate(${isCollapsed ? '0' : '180'}deg); color:var(--text-tertiary);" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
         </div>
         <div class="price-wrap" style="display:${displayMain}; flex:1; min-width:0;">
-          ${wrapR$(`<input type="text" inputmode="decimal" class="price-main-input req" id="price-in-${idx}" value="0,00" onblur="onPriceBlur(${idx}, this.value)">`)}
+          ${wrapR$(`<input type="text" inputmode="decimal" class="price-main-input req" id="price-in-${idx}" value="${fmtIn(priceFromMargin(calcCostPerUnit(currentProduct)*q.qty, q.margin, currentProduct))}" onblur="onPriceBlur(${idx}, this.value)" onclick="event.stopPropagation()">`)}
         </div>
       </div>
 
-      <div id="colortable-${idx}"></div>
+      <div class="qty-card-content" id="qty-content-${idx}" style="display: ${isCollapsed ? 'none' : 'block'}">
+        <div id="colortable-${idx}"></div>
 
-
-      <div id="main-qty-content-${idx}" style="display:${displayMain};">
-        <div class="anuncio-box" style="display:flex; justify-content:space-between; align-items:center; background:var(--card-bg); border:1px solid #fcd34d; border-radius:8px; padding:12px; margin-bottom:12px;">
-          <div class="anuncio-left" style="display:flex; flex-direction:column; gap:2px;">
-            <div class="anuncio-label" style="font-size:12px; font-weight:700; color:var(--amber-text);">Valor Venda + (${Math.round(anuncioPct(idx)*100)}%) Cadastro Base</div>
-            <div class="anuncio-sub" style="font-size:10px; color:var(--text-tertiary);">Acréscimo ref ao número de unidades</div>
+        <div id="main-qty-content-${idx}" style="display:${displayMain};">
+          <div class="anuncio-box" style="display:flex; justify-content:space-between; align-items:center; background:var(--card-bg); border:1px solid #fcd34d; border-radius:8px; padding:12px; margin-bottom:12px;">
+            <div class="anuncio-left" style="display:flex; flex-direction:column; gap:2px;">
+              <div class="anuncio-label" style="font-size:12px; font-weight:700; color:var(--amber-text);">Valor Venda + (${Math.round(anuncioPct(idx)*100)}%) Cadastro Base</div>
+              <div class="anuncio-sub" style="font-size:10px; color:var(--text-tertiary);">Acréscimo ref ao número de unidades</div>
+            </div>
+            <div style="display:flex; flex-direction:column; align-items:flex-end; gap:4px;">
+               ${wrapR$(`<input type="text" inputmode="decimal" class="price-main-input opt" id="anuncio-${idx}" style="color:var(--amber-text); border-bottom-color:var(--amber); width:90px; text-align:right; font-weight:800;" value="${fmtIn(priceFromMargin(calcCostPerUnit(currentProduct)*q.qty, q.margin, currentProduct) * (1+anuncioPct(idx)))}" onblur="onAnuncioBlur(${idx}, this.value)">`)}
+               <div id="anuncio-reset-${idx}" style="display:none;font-size:10px;color:var(--blue-text);cursor:pointer;text-decoration:underline;" onclick="resetAnuncio(${idx})">Restaurar Original</div>
+            </div>
           </div>
-          <div style="display:flex; flex-direction:column; align-items:flex-end; gap:4px;">
-             ${wrapR$(`<input type="text" inputmode="decimal" class="price-main-input opt" id="anuncio-${idx}" style="color:var(--amber-text); border-bottom-color:var(--amber); width:90px; text-align:right; font-weight:800;" value="0,00" onblur="onAnuncioBlur(${idx}, this.value)">`)}
-             <div id="anuncio-reset-${idx}" style="display:none;font-size:10px;color:var(--blue-text);cursor:pointer;text-decoration:underline;" onclick="resetAnuncio(${idx})">Restaurar Original</div>
+
+          <div class="margin-row">
+            <span class="margin-label">Margem Desejada:</span>
+            <input type="range" id="margin-range-${idx}" min="1" max="60" step="0.01" value="${q.margin}" oninput="onMarginInput(${idx}, this.value)" onchange="updateQtyCard(${idx})">
+            <div style="display:flex; align-items:center; min-width:45px;">
+               ${wrapPct(`<input type="text" inputmode="numeric" id="margin-disp-${idx}" class="margin-display" style="width:100%; text-align:center; border:none; border-bottom:1px solid var(--text-primary); outline:none; background:transparent; font-size:14px; font-weight:800; padding:0; height:18px;" value="${Number(q.margin || 20).toFixed(0)}" onblur="onMarginManual(${idx}, this.value)" onkeyup="if(event.key==='Enter') this.blur();">`)}
+            </div>
+          </div>
+
+          <div class="qty-stats">
+            <div class="qty-stat">
+              <div class="qty-stat-label">Custo Médio</div>
+              <div class="qty-stat-value" id="stat-cost-${idx}">0,00</div>
+            </div>
+            <div class="qty-stat">
+              <div class="qty-stat-label">Taxas Padrão Base</div>
+              <div class="qty-stat-value" id="stat-fees-${idx}">0,00</div>
+            </div>
+            <div class="qty-stat">
+              <div class="qty-stat-label" style="color:var(--purple); font-weight:bold;">Lucro Un. Padrão</div>
+              <div class="qty-stat-value profit" id="stat-profit-${idx}">0,00</div>
+            </div>
           </div>
         </div>
 
-        <div class="margin-row">
-          <span class="margin-label">Margem Desejada:</span>
-          <input type="range" id="margin-range-${idx}" min="1" max="60" step="0.01" value="${q.margin}" oninput="onMarginInput(${idx}, this.value)" onchange="updateQtyCard(${idx})">
-          <div style="display:flex; align-items:center; min-width:45px;">
-             ${wrapPct(`<input type="text" inputmode="numeric" id="margin-disp-${idx}" class="margin-display" style="width:100%; text-align:center; border:none; border-bottom:1px solid var(--text-primary); outline:none; background:transparent; font-size:14px; font-weight:800; padding:0; height:18px;" value="${Number(q.margin).toFixed(0)}" onblur="onMarginManual(${idx}, this.value)" onkeyup="if(event.key==='Enter') this.blur();">`)}
+        <div class="comp-section">
+          <div class="comp-title">Concorrentes Diretos (Opcional)</div>
+          <div class="comp-grid">
+            <div class="comp-col">
+              <label>Concorrente 1 (R$)</label>
+              <input type="text" inputmode="decimal" class="opt" value="${valBR(q.comps[0])}" oninput="onComp(${idx}, 0, this.value)">
+              <div id="comp-t-${idx}-0"></div>
+            </div>
+            <div class="comp-col">
+              <label>Concorrente 2 (R$)</label>
+              <input type="text" inputmode="decimal" class="opt" value="${valBR(q.comps[1])}" oninput="onComp(${idx}, 1, this.value)">
+              <div id="comp-t-${idx}-1"></div>
+            </div>
+            <div class="comp-col">
+              <label>Concorrente 3 (R$)</label>
+              <input type="text" inputmode="decimal" class="opt" value="${valBR(q.comps[2])}" oninput="onComp(${idx}, 2, this.value)">
+              <div id="comp-t-${idx}-2"></div>
+            </div>
           </div>
-        </div>
-
-        <div class="qty-stats">
-          <div class="qty-stat">
-            <div class="qty-stat-label">Custo Médio</div>
-            <div class="qty-stat-value" id="stat-cost-${idx}">0,00</div>
-          </div>
-          <div class="qty-stat">
-            <div class="qty-stat-label">Taxas Padrão Base</div>
-            <div class="qty-stat-value" id="stat-fees-${idx}">0,00</div>
-          </div>
-          <div class="qty-stat">
-            <div class="qty-stat-label" style="color:var(--purple); font-weight:bold;">Lucro Un. Padrão</div>
-            <div class="qty-stat-value profit" id="stat-profit-${idx}">0,00</div>
-          </div>
-        </div>
-      </div>
-
-      <div class="comp-section">
-        <div class="comp-title">Concorrentes Diretos (Opcional)</div>
-        <div class="comp-grid">
-           <div class="comp-col">
-             <label>Concorrente 1 (R$)</label>
-             <input type="text" inputmode="decimal" class="opt" value="${valBR(q.comps[0])}" oninput="onComp(${idx}, 0, this.value)">
-             <div id="comp-t-${idx}-0"></div>
-           </div>
-           <div class="comp-col">
-             <label>Concorrente 2 (R$)</label>
-             <input type="text" inputmode="decimal" class="opt" value="${valBR(q.comps[1])}" oninput="onComp(${idx}, 1, this.value)">
-             <div id="comp-t-${idx}-1"></div>
-           </div>
-           <div class="comp-col">
-             <label>Concorrente 3 (R$)</label>
-             <input type="text" inputmode="decimal" class="opt" value="${valBR(q.comps[2])}" oninput="onComp(${idx}, 2, this.value)">
-             <div id="comp-t-${idx}-2"></div>
-           </div>
         </div>
       </div>
     </div>`;
@@ -1790,6 +1817,12 @@ function onMaxQty(v) {
 // ---- EVENT HANDLERS: QTY ----
 function onQtyLabel(idx, v) { currentProduct.quantities[idx].label = v; }
 function onQtyNum(idx, v)   { currentProduct.quantities[idx].qty = parseInt(v) || 1; updateQtyCard(idx); }
+
+function toggleQtyCard(idx) {
+  const q = currentProduct.quantities[idx];
+  q.collapsed = !q.collapsed;
+  renderAllQtyCards();
+}
 
 function onMarginInput(idx, v) {
   const margin = parseFloat(v);
@@ -1949,7 +1982,7 @@ function onColorAdBlur(idx, cName, raw) {
   else { getCS(currentProduct.quantities[idx], cName).manualAdPrice = parseBR(raw); }
   updateQtyCard(idx);
 }
-// Live bidirectional sync: price input → slider + margin display
+// Live bidirectional sync: price input → slider + margin display + cadastrado
 function onColorPriceInput(idx, cName, raw) {
   const price = parseBR(raw);
   if (price <= 0) return;
@@ -1970,13 +2003,36 @@ function onColorPriceInput(idx, cName, raw) {
   // Update margin % text
   const marginDisp = document.getElementById(`margin-pct-${idx}-${safeName}`);
   if (marginDisp) marginDisp.value = Math.round(margin);
-}
 
+  // REAL-TIME SYNC: Update Cadastrado if not manual
+  if (cs.manualAdPrice == null) {
+    const pct = anuncioPct(idx);
+    const autoAd = price * (1 + pct);
+    const adInput = document.getElementById(`ad-in-${idx}-${safeName}`);
+    if (adInput) adInput.value = fmtIn(autoAd);
+    const adBadge = document.getElementById(`ad-badge-${idx}-${safeName}`);
+    if (adBadge) adBadge.innerText = `+${Math.round(pct * 100)}%`;
+  }
+}
 // Live ad price input (lightweight, no re-render)
-function onColorAdInput(idx, cName, raw) {
-  const val = parseBR(raw);
-  if (val > 0) {
-    getCS(currentProduct.quantities[idx], cName).manualAdPrice = val;
+function onColorAdInput(idx, cName, val) {
+  const q = currentProduct.quantities[idx];
+  const cs = getCS(q, cName);
+  if (val.trim() === '') {
+    cs.manualAdPrice = null;
+  } else {
+    cs.manualAdPrice = parseBR(val);
+  }
+  
+  const safeName = cName.replace(/\s+/g, '-');
+  const adBadge = document.getElementById(`ad-badge-${idx}-${safeName}`);
+  if (adBadge) {
+    const c = currentProduct.selectedColors.find(x => x.name === cName);
+    const tcR = calcColorCost(currentProduct, c) * q.qty;
+    const price = cs.manualPrice != null ? cs.manualPrice : priceFromMargin(tcR, cs.margin, currentProduct);
+    const curAd = cs.manualAdPrice != null ? cs.manualAdPrice : price * (1 + anuncioPct(idx));
+    const pct = price > 0 ? Math.round(((curAd - price) / price) * 100) : 0;
+    adBadge.innerText = `+${pct}%`;
   }
 }
 
