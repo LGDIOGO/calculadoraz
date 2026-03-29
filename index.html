@@ -9,6 +9,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-storage-compat.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -481,6 +482,28 @@
     }
     .btn-fab-save:hover { transform: translateY(-2px); background: #a94b15; }
     .btn-fab-save.hidden { display: none; }
+
+    /* ---- ATTACHMENTS CSS ---- */
+    #attachments-section.dragover {
+      border: 2px dashed var(--purple);
+      background: var(--purple-light);
+    }
+    .attachment-card {
+      display: flex; align-items: center; justify-content: space-between; 
+      padding: 10px; background: #fff; border: 1px solid var(--border); 
+      border-radius: 8px; margin-bottom: 6px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); 
+      transition: all 0.2s;
+    }
+    .attachment-card:hover { border-color: var(--purple); transform: translateY(-1px); box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+
+    .btn-action-small {
+      width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;
+      border-radius: 6px; border: none; cursor: pointer; transition: all 0.2s; font-size: 14px;
+    }
+    .btn-download { background: var(--blue-light); color: var(--blue-text); }
+    .btn-download:hover { background: #bfdbfe; }
+    .btn-delete-att { background: var(--red-light); color: var(--red-text); }
+    .btn-delete-att:hover { background: #fecaca; }
   </style>
 </head>
 <body>
@@ -670,8 +693,9 @@ if (!NEEDS_SETUP) {
   firebase.initializeApp(firebaseConfig);
 }
 
-const auth = NEEDS_SETUP ? null : firebase.auth();
-const db   = NEEDS_SETUP ? null : firebase.firestore();
+const auth    = NEEDS_SETUP ? null : firebase.auth();
+const db      = NEEDS_SETUP ? null : firebase.firestore();
+const storage = NEEDS_SETUP ? null : firebase.storage();
 
 // ---- CONSTANTS ----
 const FEE_PCT   = 0.20; // 20% comissão Shopee
@@ -706,6 +730,7 @@ function defaultProduct(title = 'Novo Produto') {
     accessories: [],
     packagingCost: 0.30,
     adsCost: 0,
+    attachments: [],
     quantities: [
       { label: '1 unidade',   qty: 1, margin: 20, comps: ['','',''], collapsed: true },
       { label: '2 unidades',  qty: 2, margin: 20, comps: ['','',''], collapsed: true },
@@ -1446,11 +1471,202 @@ function renderCostSection() {
 
     <div class="section">
       <div class="section-title">Precificação por Variação</div>
-<div class="qty-cards-grid" id="qty-cards"></div>
+      <div class="qty-cards-grid" id="qty-cards"></div>
+    </div>
+
+    <!-- ATTACHMENTS SECTION -->
+    <div class="section" id="attachments-section">
+      <div class="section-title">Projetos 3D e Arquivos</div>
+      <div id="attachments-list" style="margin-bottom: 15px;"></div>
+      
+      <div id="upload-progress-container" style="display: none; margin-bottom: 12px;">
+        <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 4px;">
+          <span id="upload-filename" style="color: var(--text-secondary); font-weight: 600;">Enviando...</span>
+          <span id="upload-pct" style="color: var(--green); font-weight: 800;">0%</span>
+        </div>
+        <div style="width: 100%; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden;">
+          <div id="upload-bar" style="width: 0%; height: 100%; background: var(--green); transition: width 0.2s;"></div>
+        </div>
+      </div>
+
+      <button class="btn-add-acc" onclick="document.getElementById('file-upload-input').click()" style="border-style: solid; border-width: 2px;">
+        <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24" style="margin-right: 4px;"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+        Anexar Projetos 3D (stl, 3mf, gcode, etc...)
+      </button>
+      <input type="file" id="file-upload-input" style="display: none;" onchange="onFileSelect(this)" multiple>
+      <p style="font-size: 10px; color: var(--text-tertiary); margin-top: 8px; font-style: italic;">
+        Você também pode arrastar e soltar os arquivos aqui.
+      </p>
     </div>`;
 
   document.getElementById('main-content').innerHTML = costHTML;
+  renderAttachmentsList();
   renderAllQtyCards();
+}
+
+// ---- ATTACHMENTS LOGIC ----
+function renderAttachmentsList() {
+  const el = document.getElementById('attachments-list');
+  if (!el) return;
+  const atts = currentProduct.attachments || [];
+  
+  if (atts.length === 0) {
+    el.innerHTML = `<p style="font-size: 11px; color: var(--text-tertiary); text-align: center; border: 1.5px dashed var(--border); padding: 15px; border-radius: 8px;">Nenhum arquivo anexado.</p>`;
+    return;
+  }
+
+  el.innerHTML = atts.map((a, i) => `
+    <div class="attachment-card">
+      <div style="display: flex; align-items: center; gap: 10px; overflow: hidden;">
+        <div style="width: 32px; height: 32px; background: #f3f4f6; border-radius: 6px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: var(--purple); font-size: 16px;">
+          ${getFileIcon(a.name)}
+        </div>
+        <div style="overflow: hidden;">
+          <div style="font-size: 12px; font-weight: 700; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${a.name}">${a.name}</div>
+          <div style="font-size: 10px; color: var(--text-tertiary);">${(a.size / 1024 / 1024).toFixed(2)} MB</div>
+        </div>
+      </div>
+      <div style="display: flex; gap: 6px;">
+        <a href="${a.url}" target="_blank" class="btn-action-small btn-download" title="Baixar">📥</a>
+        <button onclick="deleteAttachment('${a.id}')" class="btn-action-small btn-delete-att" title="Excluir">✖</button>
+      </div>
+    </div>
+  `).join('');
+
+  // Setup Drag and Drop
+  setupDragAndDrop();
+}
+
+function setupDragAndDrop() {
+  const zone = document.getElementById('attachments-section');
+  if (!zone) return;
+  
+  // Clear old listeners if any (simple way for this app)
+  zone.ondragover = (e) => { e.preventDefault(); zone.classList.add('dragover'); };
+  zone.ondragleave = () => { zone.classList.remove('dragover'); };
+  zone.ondrop = async (e) => {
+    e.preventDefault();
+    zone.classList.remove('dragover');
+    const files = Array.from(e.dataTransfer.files);
+    for (const f of files) {
+      if (f.size > 20 * 1024 * 1024) {
+        showToast(`Arquivo "${f.name}" excede 20MB.`, 'error');
+        continue;
+      }
+      await uploadFile(f);
+    }
+  };
+}
+
+function getFileIcon(name) {
+  const ext = name.split('.').pop().toLowerCase();
+  if (['stl', '3mf', 'obj'].includes(ext)) return '🧊';
+  if (['gcode', 'txt'].includes(ext)) return '📜';
+  if (['pdf'].includes(ext)) return '📄';
+  if (['zip', 'rar', '7z'].includes(ext)) return '📦';
+  return '📎';
+}
+
+async function onFileSelect(input) {
+  const files = Array.from(input.files);
+  if (files.length === 0) return;
+  if (!currentProduct.id) {
+    showToast('Salve o produto primeiro para anexar arquivos.', 'error');
+    input.value = '';
+    return;
+  }
+  
+  for (const f of files) {
+    if (f.size > 20 * 1024 * 1024) { // 20MB limit
+      showToast(`Arquivo "${f.name}" excede 20MB.`, 'error');
+      continue;
+    }
+    await uploadFile(f);
+  }
+  input.value = '';
+}
+
+async function uploadFile(file) {
+  const progContainer = document.getElementById('upload-progress-container');
+  const progFilename  = document.getElementById('upload-filename');
+  const progPct       = document.getElementById('upload-pct');
+  const progBar       = document.getElementById('upload-bar');
+
+  progContainer.style.display = 'block';
+  progFilename.innerText = file.name;
+  progPct.innerText = '0%';
+  progBar.style.width = '0%';
+
+  const fileId = Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+  const path = `users/${currentUser.uid}/products/${currentProduct.id}/${fileId}_${file.name}`;
+  const ref = storage.ref().child(path);
+  const task = ref.put(file);
+
+  return new Promise((resolve, reject) => {
+    task.on('state_changed', 
+      (snap) => {
+        const pct = Math.round((snap.bytesTransferred / snap.totalBytes) * 100);
+        progPct.innerText = pct + '%';
+        progBar.style.width = pct + '%';
+      },
+      (err) => {
+        console.error(err);
+        showToast('Erro no upload.', 'error');
+        progContainer.style.display = 'none';
+        reject(err);
+      },
+      async () => {
+        const url = await task.snapshot.ref.getDownloadURL();
+        if (!currentProduct.attachments) currentProduct.attachments = [];
+        const newAtt = {
+          id: fileId,
+          name: file.name,
+          url: url,
+          size: file.size,
+          path: path,
+          type: file.type,
+          createdAt: Date.now()
+        };
+        currentProduct.attachments.push(newAtt);
+        
+        // Auto-save metadata to Firestore
+        await productsRef().doc(currentProduct.id).update({
+          attachments: currentProduct.attachments
+        });
+
+        progContainer.style.display = 'none';
+        renderAttachmentsList();
+        showToast('Sucesso!', 'success');
+        resolve();
+      }
+    );
+  });
+}
+
+async function deleteAttachment(id) {
+  if (!confirm('Excluir este arquivo permanentemente?')) return;
+  
+  const att = currentProduct.attachments.find(a => a.id === id);
+  if (!att) return;
+
+  try {
+    // 1. Delete from Storage
+    if (att.path) {
+      await storage.ref().child(att.path).delete();
+    }
+    
+    // 2. Update Firestore
+    currentProduct.attachments = currentProduct.attachments.filter(a => a.id !== id);
+    await productsRef().doc(currentProduct.id).update({
+      attachments: currentProduct.attachments
+    });
+    
+    renderAttachmentsList();
+    showToast('Arquivo removido.');
+  } catch(e) {
+    console.error(e);
+    showToast('Erro ao excluir.', 'error');
+  }
 }
 
 function renderQtySection() {}
@@ -1819,9 +2035,26 @@ function onQtyLabel(idx, v) { currentProduct.quantities[idx].label = v; }
 function onQtyNum(idx, v)   { currentProduct.quantities[idx].qty = parseInt(v) || 1; updateQtyCard(idx); }
 
 function toggleQtyCard(idx) {
+  const card = document.getElementById(`qty-card-${idx}`);
+  if (!card) return;
   const q = currentProduct.quantities[idx];
   q.collapsed = !q.collapsed;
-  renderAllQtyCards();
+  card.classList.toggle('collapsed');
+  const icon = card.querySelector('.icon-chevron');
+  if (icon) icon.style.transform = q.collapsed ? 'rotate(0deg)' : 'rotate(180deg)';
+  
+  // Save local state to Firebase
+  saveProductSilently();
+}
+
+async function saveProductSilently() {
+  try {
+    const data = { ...currentProduct, updatedAt: firebase.firestore.FieldValue.serverTimestamp() };
+    if (data.id) {
+      delete data.id;
+      await productsRef().doc(currentProduct.id).set(data);
+    }
+  } catch(e) {}
 }
 
 function onMarginInput(idx, v) {
