@@ -701,7 +701,7 @@ const storage = NEEDS_SETUP ? null : firebase.storage();
 // Supabase Initialization
 const supabaseUrl = 'https://dstriiursyztiwvpfbug.supabase.co';
 const supabaseKey = 'sb_publishable_Wg4I8UxOF6Kwm4dL369XrA_0fWUlW1_';
-const supabase = supabase.createClient(supabaseUrl, supabaseKey);
+const supabaseClient = supabase.createClient(supabaseUrl, supabaseKey);
 
 // ---- CONSTANTS ----
 const FEE_PCT   = 0.20; // 20% comissão Shopee
@@ -1720,7 +1720,7 @@ async function deleteAttachment(id) {
     // 1. Delete from Storage based on provider
     if (att.path) {
       if (att.provider === 'supabase') {
-        await supabase.storage.from('projects').remove([att.path]);
+        await supabaseClient.storage.from('projects').remove([att.path]);
       } else {
         // Fallback or old Firebase files
         try { await storage.ref().child(att.path).delete(); } catch(e) { console.warn("Old Firebase file not found or already deleted"); }
