@@ -1694,8 +1694,8 @@ async function uploadFile(file) {
           reject(e);
         }
       } else {
-        console.error("Supabase upload failed:", xhr.responseText);
-        showToast('Erro no upload para o Supabase. Verifique se o bucket "projects" é público.', 'error');
+        console.error("Supabase upload failed:", xhr.status, xhr.responseText);
+        showToast(`Erro Supabase (${xhr.status}): Verifique CORS e Políticas RLS do bucket 'projects'.`, 'error');
         progContainer.style.display = 'none';
         reject(new Error(xhr.responseText));
       }
