@@ -1643,9 +1643,11 @@ async function uploadFile(file) {
     // Supabase Storage API endpoint for public bucket 'projects'
     const uploadUrl = `${supabaseUrl}/storage/v1/object/projects/${path}`;
 
-    xhr.open('POST', uploadUrl, true);
+    xhr.open('PUT', uploadUrl, true);
     xhr.setRequestHeader('apikey', supabaseKey);
     xhr.setRequestHeader('Authorization', `Bearer ${supabaseKey}`);
+    xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
+    xhr.setRequestHeader('x-upsert', 'true'); // Permite sobrescrever se necessário
     // Supabase expects multipart or direct body. For standard upload() SDK equivalent:
     // We use the direct body upload.
     
