@@ -1630,86 +1630,59 @@ async function uploadFile(file) {
     return;
   }
 
+  const fileId = Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+  const path = `users/${realUser.uid}/products/${currentProduct.id}/${fileId}_${file.name}`;
+
   progContainer.style.display = 'block';
   progFilename.innerText = file.name;
   progPct.innerText = '0%';
   progBar.style.width = '0%';
 
-  const fileId = Date.now() + '_' + Math.random().toString(36).substr(2, 5);
-  const path = `users/${realUser.uid}/products/${currentProduct.id}/${fileId}_${file.name}`;
-  
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    // Supabase Storage API endpoint for public bucket 'projects'
-    const uploadUrl = `${supabaseUrl}/storage/v1/object/projects/${path}`;
-
-    xhr.open('PUT', uploadUrl, true);
-    xhr.setRequestHeader('apikey', supabaseKey);
-    xhr.setRequestHeader('Authorization', `Bearer ${supabaseKey}`);
-    xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
-    xhr.setRequestHeader('x-upsert', 'true'); // Permite sobrescrever se necessário
-    // Supabase expects multipart or direct body. For standard upload() SDK equivalent:
-    // We use the direct body upload.
-    
-    xhr.upload.onprogress = (event) => {
-      if (event.lengthComputable) {
-        const pct = Math.round((event.loaded / event.total) * 100);
+  try {
+    const { data, error } = await supabaseClient.storage.from('projects').upload(path, file, {
+      cacheControl: '3600',
+      upsert: true,
+      onUploadProgress: (evt) => {
+        const pct = Math.round((evt.loaded / evt.total) * 100);
         progPct.innerText = pct + '%';
         progBar.style.width = pct + '%';
         if (pct === 100) progPct.innerText = 'Finalizando...';
       }
-    };
+    });
 
-    xhr.onload = async () => {
-      if (xhr.status === 200 || xhr.status === 201) {
-        try {
-          // Public URL for the uploaded file
-          const publicUrl = `${supabaseUrl}/storage/v1/object/public/projects/${path}`;
-          
-          if (!currentProduct.attachments) currentProduct.attachments = [];
-          const newAtt = {
-            id: fileId,
-            name: file.name,
-            url: publicUrl,
-            size: file.size,
-            path: path, // Path inside Supabase
-            provider: 'supabase',
-            type: file.type || 'application/octet-stream',
-            createdAt: Date.now()
-          };
-          currentProduct.attachments.push(newAtt);
-          
-          await productsRef().doc(currentProduct.id).update({
-            attachments: currentProduct.attachments
-          });
-          
-          renderAttachmentsList();
-          showToast('Projeto anexado via Supabase!', 'success');
-          progContainer.style.display = 'none';
-          resolve(newAtt);
-        } catch (e) {
-          console.error("Save attachment error:", e);
-          showToast('Erro ao salvar metadados do anexo.', 'error');
-          progContainer.style.display = 'none';
-          reject(e);
-        }
-      } else {
-        console.error("Supabase upload failed:", xhr.status, xhr.responseText);
-        showToast(`Erro Supabase (${xhr.status}): Verifique CORS e Políticas RLS do bucket 'projects'.`, 'error');
-        progContainer.style.display = 'none';
-        reject(new Error(xhr.responseText));
-      }
-    };
+    if (error) throw error;
 
-    xhr.onerror = () => {
-      showToast('Erro de rede ao tentar subir para o Supabase.', 'error');
-      progContainer.style.display = 'none';
-      reject(new Error('Network error'));
+    // Public URL for the uploaded file
+    const { data: { publicUrl } } = supabaseClient.storage.from('projects').getPublicUrl(path);
+    
+    if (!currentProduct.attachments) currentProduct.attachments = [];
+    const newAtt = {
+      id: fileId,
+      name: file.name,
+      url: publicUrl,
+      size: file.size,
+      path: path,
+      provider: 'supabase',
+      type: file.type || 'application/octet-stream',
+      createdAt: Date.now()
     };
+    currentProduct.attachments.push(newAtt);
+    
+    await productsRef().doc(currentProduct.id).update({
+      attachments: currentProduct.attachments
+    });
+    
+    renderAttachmentsList();
+    showToast('Projeto anexado com sucesso!', 'success');
+    progContainer.style.display = 'none';
+    return newAtt;
 
-    // Send the file as the body
-    xhr.send(file);
-  });
+  } catch (err) {
+    console.error("Erro detalhado do Supabase:", err);
+    showToast(`Erro no upload: ${err.message || err.statusText}`, 'error');
+    progContainer.style.display = 'none';
+    throw err;
+  }
 }
 
 async function deleteAttachment(id) {
