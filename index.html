@@ -10,6 +10,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-storage-compat.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -696,6 +697,11 @@ if (!NEEDS_SETUP) {
 const auth    = NEEDS_SETUP ? null : firebase.auth();
 const db      = NEEDS_SETUP ? null : firebase.firestore();
 const storage = NEEDS_SETUP ? null : firebase.storage();
+
+// Supabase Initialization
+const supabaseUrl = 'https://dstriiursyztiwvpfbug.supabase.co';
+const supabaseKey = 'sb_publishable_Wg4I8UxOF6Kwm4dL369XrA_0fWUlW1_';
+const supabase = supabase.createClient(supabaseUrl, supabaseKey);
 
 // ---- CONSTANTS ----
 const FEE_PCT   = 0.20; // 20% comissão Shopee
@@ -1586,10 +1592,16 @@ function getFileIcon(name) {
 async function onFileSelect(input) {
   const files = Array.from(input.files);
   if (files.length === 0) return;
+  if (!currentProduct) return;
+  
   if (!currentProduct.id) {
-    showToast('Salve o produto primeiro para anexar arquivos.', 'error');
-    input.value = '';
-    return;
+    setStatus('Salvando para anexar...');
+    await saveProduct();
+    if (!currentProduct || !currentProduct.id) {
+      showToast('Erro ao criar produto para anexo.', 'error');
+      input.value = '';
+      return;
+    }
   }
   
   for (const f of files) {
@@ -1608,7 +1620,6 @@ async function uploadFile(file) {
   const progPct       = document.getElementById('upload-pct');
   const progBar       = document.getElementById('upload-bar');
 
-  // Deep check for real Firebase auth session
   const realUser = firebase.auth().currentUser;
   if (!realUser) {
     showToast('Sessão expirada. Por favor, faça login novamente.', 'error');
@@ -1626,58 +1637,76 @@ async function uploadFile(file) {
 
   const fileId = Date.now() + '_' + Math.random().toString(36).substr(2, 5);
   const path = `users/${realUser.uid}/products/${currentProduct.id}/${fileId}_${file.name}`;
-  const ref = storage.ref().child(path);
-  const task = ref.put(file);
-
+  
   return new Promise((resolve, reject) => {
-    task.on('state_changed', 
-      (snap) => {
-        const pct = Math.round((snap.bytesTransferred / snap.totalBytes) * 100);
+    const xhr = new XMLHttpRequest();
+    // Supabase Storage API endpoint for public bucket 'projects'
+    const uploadUrl = `${supabaseUrl}/storage/v1/object/projects/${path}`;
+
+    xhr.open('POST', uploadUrl, true);
+    xhr.setRequestHeader('apikey', supabaseKey);
+    xhr.setRequestHeader('Authorization', `Bearer ${supabaseKey}`);
+    // Supabase expects multipart or direct body. For standard upload() SDK equivalent:
+    // We use the direct body upload.
+    
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable) {
+        const pct = Math.round((event.loaded / event.total) * 100);
         progPct.innerText = pct + '%';
         progBar.style.width = pct + '%';
-      },
-      (err) => {
-        console.error("Upload error:", err);
-        if (err.code === 'storage/unauthorized') {
-          showToast('Erro de permissão no upload.', 'error');
-        } else {
-          showToast('Erro no upload do arquivo.', 'error');
-        }
-        progContainer.style.display = 'none';
-        reject(err);
-      },
-      async () => {
+        if (pct === 100) progPct.innerText = 'Finalizando...';
+      }
+    };
+
+    xhr.onload = async () => {
+      if (xhr.status === 200 || xhr.status === 201) {
         try {
-          const url = await task.snapshot.ref.getDownloadURL();
+          // Public URL for the uploaded file
+          const publicUrl = `${supabaseUrl}/storage/v1/object/public/projects/${path}`;
+          
           if (!currentProduct.attachments) currentProduct.attachments = [];
           const newAtt = {
             id: fileId,
             name: file.name,
-            url: url,
+            url: publicUrl,
             size: file.size,
-            path: path,
+            path: path, // Path inside Supabase
+            provider: 'supabase',
             type: file.type || 'application/octet-stream',
             createdAt: Date.now()
           };
           currentProduct.attachments.push(newAtt);
           
-          // Auto-save metadata to Firestore
           await productsRef().doc(currentProduct.id).update({
             attachments: currentProduct.attachments
           });
           
           renderAttachmentsList();
-          showToast('Projeto anexado!', 'success');
+          showToast('Projeto anexado via Supabase!', 'success');
           progContainer.style.display = 'none';
           resolve(newAtt);
         } catch (e) {
           console.error("Save attachment error:", e);
-          showToast('Erro ao concluir anexo.', 'error');
+          showToast('Erro ao salvar metadados do anexo.', 'error');
           progContainer.style.display = 'none';
           reject(e);
         }
+      } else {
+        console.error("Supabase upload failed:", xhr.responseText);
+        showToast('Erro no upload para o Supabase. Verifique se o bucket "projects" é público.', 'error');
+        progContainer.style.display = 'none';
+        reject(new Error(xhr.responseText));
       }
-    );
+    };
+
+    xhr.onerror = () => {
+      showToast('Erro de rede ao tentar subir para o Supabase.', 'error');
+      progContainer.style.display = 'none';
+      reject(new Error('Network error'));
+    };
+
+    // Send the file as the body
+    xhr.send(file);
   });
 }
 
@@ -1688,9 +1717,14 @@ async function deleteAttachment(id) {
   if (!att) return;
 
   try {
-    // 1. Delete from Storage
+    // 1. Delete from Storage based on provider
     if (att.path) {
-      await storage.ref().child(att.path).delete();
+      if (att.provider === 'supabase') {
+        await supabase.storage.from('projects').remove([att.path]);
+      } else {
+        // Fallback or old Firebase files
+        try { await storage.ref().child(att.path).delete(); } catch(e) { console.warn("Old Firebase file not found or already deleted"); }
+      }
     }
     
     // 2. Update Firestore
