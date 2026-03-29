@@ -2018,18 +2018,18 @@ function updateCostCalcs() {
 
 // ---- EVENT HANDLERS: COSTS ----
 function onFilType(v)    { currentProduct.filamentType = v; }
-function onFilPrice(v)   { currentProduct.filamentPriceKg = parseBR(v); updateCostCalcs(); }
-function onFilGrams(v)   { currentProduct.filamentGrams = parseBR(v); updateCostCalcs(); }
-function onEnergy(v)     { currentProduct.energyCost = parseBR(v); updateCostCalcs(); }
+function onFilPrice(v)   { currentProduct.filamentPriceKg = parseBR(v); updateCostCalcs(); saveProductSilently(); }
+function onFilGrams(v)   { currentProduct.filamentGrams = parseBR(v); updateCostCalcs(); saveProductSilently(); }
+function onEnergy(v)     { currentProduct.energyCost = parseBR(v); updateCostCalcs(); saveProductSilently(); }
 function onUseTape(v)    { currentProduct.useTape = v; renderCostSection(); }
-function onTax(v)        { currentProduct.taxPct = parseBR(v); updateCostCalcs(); }
-function onTapeRollPrice(v) { currentProduct.tapeRollPrice = parseBR(v); updateCostCalcs(); }
-function onTapeRollM(v)     { currentProduct.tapeRollM = parseBR(v); updateCostCalcs(); }
-function onTapeCmUnit(v)    { currentProduct.tapeCmUnit = parseBR(v); updateCostCalcs(); }
+function onTax(v)        { currentProduct.taxPct = parseBR(v); updateCostCalcs(); saveProductSilently(); }
+function onTapeRollPrice(v) { currentProduct.tapeRollPrice = parseBR(v); updateCostCalcs(); saveProductSilently(); }
+function onTapeRollM(v)     { currentProduct.tapeRollM = parseBR(v); updateCostCalcs(); saveProductSilently(); }
+function onTapeCmUnit(v)    { currentProduct.tapeCmUnit = parseBR(v); updateCostCalcs(); saveProductSilently(); }
 function onTape()           { onTapeRollPrice(el('tape-roll-price').value); }
-function onPackaging(v)  { currentProduct.packagingCost = parseBR(v); updateCostCalcs(); }
-function onAds(v)        { currentProduct.adsCost = parseBR(v); updateCostCalcs(); }
-function onFailure(v)    { currentProduct.failurePct = parseBR(v); updateCostCalcs(); }
+function onPackaging(v)  { currentProduct.packagingCost = parseBR(v); updateCostCalcs(); saveProductSilently(); }
+function onAds(v)        { currentProduct.adsCost = parseBR(v); updateCostCalcs(); saveProductSilently(); }
+function onFailure(v)    { currentProduct.failurePct = parseBR(v); updateCostCalcs(); saveProductSilently(); }
 
 function addAcc() {
   currentProduct.accessories.push({ name: '', cost: 0 });
@@ -2212,6 +2212,14 @@ function onColorMarginInput(idx, cName, val) {
 
   const profitDiv = document.getElementById(`profit-disp-${idx}-${safeName}`);
   if (profitDiv) profitDiv.innerText = `Lucro: R$ ${fmt(s.res.profit)}`;
+
+  // INTERLINK: Sync Cadastrado
+  const pct = anuncioPct(idx);
+  const autoAd = s.prS * (1 + pct);
+  const adInput = document.getElementById(`ad-in-${idx}-${safeName}`);
+  if (adInput) adInput.value = fmtIn(autoAd);
+  const adBadge = document.getElementById(`ad-badge-${idx}-${safeName}`);
+  if (adBadge) adBadge.innerText = `+${Math.round(pct * 100)}%`;
 }
 function onColorMarginChange(idx, cName, val) {
   updateQtyCard(idx);
@@ -2275,35 +2283,64 @@ function onColorPriceInput(idx, cName, raw) {
   const marginDisp = document.getElementById(`margin-pct-${idx}-${safeName}`);
   if (marginDisp) marginDisp.value = Math.round(margin);
 
-  // REAL-TIME SYNC: Update Cadastrado if not manual
-  if (cs.manualAdPrice == null) {
-    const pct = anuncioPct(idx);
-    const autoAd = price * (1 + pct);
-    const adInput = document.getElementById(`ad-in-${idx}-${safeName}`);
-    if (adInput) adInput.value = fmtIn(autoAd);
-    const adBadge = document.getElementById(`ad-badge-${idx}-${safeName}`);
-    if (adBadge) adBadge.innerText = `+${Math.round(pct * 100)}%`;
-  }
+  // REAL-TIME SYNC: Update Cadastrado (Always interlinked)
+  const pct = anuncioPct(idx);
+  const autoAd = price * (1 + pct);
+  const adInput = document.getElementById(`ad-in-${idx}-${safeName}`);
+  // IMPORTANT: Do NOT update adInput if it's currently focused to avoid jitter
+  if (adInput && document.activeElement !== adInput) adInput.value = fmtIn(autoAd);
+  
+  const adBadge = document.getElementById(`ad-badge-${idx}-${safeName}`);
+  if (adBadge) adBadge.innerText = `+${Math.round(pct * 100)}%`;
+  
+  saveProductSilently();
 }
 // Live ad price input (lightweight, no re-render)
 function onColorAdInput(idx, cName, val) {
   const q = currentProduct.quantities[idx];
   const cs = getCS(q, cName);
-  if (val.trim() === '') {
-    cs.manualAdPrice = null;
-  } else {
-    cs.manualAdPrice = parseBR(val);
-  }
-  
+  const p = currentProduct;
+  const c = p.selectedColors.find(x => x.name === cName);
+  if (!c) return;
+
   const safeName = cName.replace(/\s+/g, '-');
   const adBadge = document.getElementById(`ad-badge-${idx}-${safeName}`);
-  if (adBadge) {
-    const c = currentProduct.selectedColors.find(x => x.name === cName);
-    const tcR = calcColorCost(currentProduct, c) * q.qty;
-    const price = cs.manualPrice != null ? cs.manualPrice : priceFromMargin(tcR, cs.margin, currentProduct);
-    const curAd = cs.manualAdPrice != null ? cs.manualAdPrice : price * (1 + anuncioPct(idx));
-    const pct = price > 0 ? Math.round(((curAd - price) / price) * 100) : 0;
-    adBadge.innerText = `+${pct}%`;
+
+  if (val.trim() === '') {
+    cs.manualAdPrice = null;
+    if (adBadge) adBadge.style.opacity = '0.3';
+  } else {
+    const adPrice = parseBR(val);
+    cs.manualAdPrice = adPrice;
+    if (adBadge) adBadge.style.opacity = '1';
+
+    // INTERLINK: Sync Price (Venda Final) from Cadastrado
+    // Keeping the default markup % for the variation level constant
+    const pct = anuncioPct(idx);
+    const newPrice = adPrice / (1 + pct);
+    cs.manualPrice = newPrice;
+    
+    const priceIn = document.getElementById(`price-in-${idx}-${safeName}`);
+    // IMPORTANT: Do NOT update priceIn if it's currently focused
+    if (priceIn && document.activeElement !== priceIn) priceIn.value = fmtIn(newPrice);
+    
+    // Update Margin
+    const tcR = calcColorCost(p, c) * q.qty;
+    const margin = Math.min(99, Math.max(1, marginFromPrice(tcR, newPrice, p)));
+    cs.margin = margin;
+    
+    // Update Slider & Disp
+    const slider = document.querySelector(`#qcard-${idx} input[type=range][oninput*="'${cName}'"]`);
+    if (slider) slider.value = margin;
+    const marginDisp = document.getElementById(`margin-pct-${idx}-${safeName}`);
+    if (marginDisp) marginDisp.value = Math.round(margin);
+    
+    const profitDiv = document.getElementById(`profit-disp-${idx}-${safeName}`);
+    const res = calcFromPrice(tcR, newPrice, p);
+    if (profitDiv) profitDiv.innerText = `Lucro: R$ ${fmt(res.profit)}`;
+
+    if (adBadge) adBadge.innerText = `+${Math.round(pct * 100)}%`;
+    saveProductSilently();
   }
 }
 
