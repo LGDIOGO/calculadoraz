@@ -730,6 +730,7 @@ function defaultProduct(title = 'Novo Produto') {
     accessories: [],
     packagingCost: 0.30,
     adsCost: 0,
+    failurePct: 0,
     attachments: [],
     quantities: [
       { label: '1 unidade',   qty: 1, margin: 20, comps: ['','',''], collapsed: true },
@@ -901,6 +902,16 @@ async function loadProducts() {
 
 async function saveProduct() {
   if (!currentProduct) return;
+  // Deep check for real Firebase auth session
+  const realUser = firebase.auth().currentUser;
+  if (!realUser) {
+    showToast('Sessão expirada. Por favor, faça login novamente.', 'error');
+    currentUser = null;
+    if (el('login-screen')) el('login-screen').style.display = 'flex';
+    if (el('app')) el('app').classList.remove('visible');
+    return;
+  }
+  
   readFormIntoProduct();
   setStatus('Salvando...');
   try {
@@ -912,9 +923,10 @@ async function saveProduct() {
       const ref = await productsRef().add(data);
       currentProduct.id = ref.id;
     }
-    const existing = products.find(p => p.id === currentProduct.id);
-    if (existing) Object.assign(existing, currentProduct);
-    else {
+    const index = products.findIndex(p => p.id === currentProduct.id);
+    if (index !== -1) {
+      products[index] = { ...currentProduct };
+    } else {
       currentProduct.sortOrder = products.length ? Math.max(...products.map(p => p.sortOrder || 0)) + 1 : 0;
       products.push({ ...currentProduct });
     }
@@ -923,7 +935,12 @@ async function saveProduct() {
     showToast('Produto salvo!', 'success');
     setTimeout(() => setStatus(''), 3000);
   } catch(e) {
-    showToast('Erro ao salvar.', 'error');
+    console.error("Save error:", e);
+    if (e.code === 'permission-denied') {
+      showToast('Erro de permissão. Verifique seu login.', 'error');
+    } else {
+      showToast('Erro ao salvar no banco de dados.', 'error');
+    }
     setStatus('');
   }
 }
@@ -1453,7 +1470,7 @@ function renderCostSection() {
           <div class="field-group">
             <label style="margin-bottom:2px; font-weight:700;">Ads</label>
             <div style="height:17px;"></div>
-            <input type="text" inputmode="decimal" id="ads-cost" class="field-input opt" style="margin-top:4px;" value="${valBR(p.adsCost)}" oninput="onAds(this.value)">
+            ${wrapR$(`<input type="text" inputmode="decimal" id="ads-cost" class="field-input opt" style="margin-top:4px;" value="${valBR(p.adsCost)}" oninput="onAds(this.value)">`)}
           </div>
           <div class="field-group">
             <label style="margin-bottom:2px; font-weight:700;" title="% aplicada sobre o custo de impressão (filamento + energia) para cobrir falhas de impressão">Falhas/Fugas</label>
@@ -1464,7 +1481,7 @@ function renderCostSection() {
       </div>
 
       <div class="total-cost-bar">
-        <span>Custo  Médio  por  Unidade</span>
+        <span>Custo&nbsp;&nbsp;Médio&nbsp;&nbsp;por&nbsp;&nbsp;Unidade</span>
         <span id="glb-cpu-display">${fmt(cpu)}</span>
       </div>
     </div>
@@ -1592,13 +1609,24 @@ async function uploadFile(file) {
   const progPct       = document.getElementById('upload-pct');
   const progBar       = document.getElementById('upload-bar');
 
+  // Deep check for real Firebase auth session
+  const realUser = firebase.auth().currentUser;
+  if (!realUser) {
+    showToast('Sessão expirada. Por favor, faça login novamente.', 'error');
+    return;
+  }
+  if (!currentProduct || !currentProduct.id) {
+    showToast('Salve o produto primeiro para anexar arquivos.', 'error');
+    return;
+  }
+
   progContainer.style.display = 'block';
   progFilename.innerText = file.name;
   progPct.innerText = '0%';
   progBar.style.width = '0%';
 
   const fileId = Date.now() + '_' + Math.random().toString(36).substr(2, 5);
-  const path = `users/${currentUser.uid}/products/${currentProduct.id}/${fileId}_${file.name}`;
+  const path = `users/${realUser.uid}/products/${currentProduct.id}/${fileId}_${file.name}`;
   const ref = storage.ref().child(path);
   const task = ref.put(file);
 
@@ -1610,34 +1638,45 @@ async function uploadFile(file) {
         progBar.style.width = pct + '%';
       },
       (err) => {
-        console.error(err);
-        showToast('Erro no upload.', 'error');
+        console.error("Upload error:", err);
+        if (err.code === 'storage/unauthorized') {
+          showToast('Erro de permissão no upload.', 'error');
+        } else {
+          showToast('Erro no upload do arquivo.', 'error');
+        }
         progContainer.style.display = 'none';
         reject(err);
       },
       async () => {
-        const url = await task.snapshot.ref.getDownloadURL();
-        if (!currentProduct.attachments) currentProduct.attachments = [];
-        const newAtt = {
-          id: fileId,
-          name: file.name,
-          url: url,
-          size: file.size,
-          path: path,
-          type: file.type,
-          createdAt: Date.now()
-        };
-        currentProduct.attachments.push(newAtt);
-        
-        // Auto-save metadata to Firestore
-        await productsRef().doc(currentProduct.id).update({
-          attachments: currentProduct.attachments
-        });
-
-        progContainer.style.display = 'none';
-        renderAttachmentsList();
-        showToast('Sucesso!', 'success');
-        resolve();
+        try {
+          const url = await task.snapshot.ref.getDownloadURL();
+          if (!currentProduct.attachments) currentProduct.attachments = [];
+          const newAtt = {
+            id: fileId,
+            name: file.name,
+            url: url,
+            size: file.size,
+            path: path,
+            type: file.type || 'application/octet-stream',
+            createdAt: Date.now()
+          };
+          currentProduct.attachments.push(newAtt);
+          
+          // Auto-save metadata to Firestore
+          await productsRef().doc(currentProduct.id).update({
+            attachments: currentProduct.attachments
+          });
+          
+          renderAttachmentsList();
+          showToast('Projeto anexado!', 'success');
+          progContainer.style.display = 'none';
+          resolve(newAtt);
+        } catch (e) {
+          console.error("Save attachment error:", e);
+          showToast('Erro ao concluir anexo.', 'error');
+          progContainer.style.display = 'none';
+          reject(e);
+        }
       }
     );
   });
@@ -1773,16 +1812,20 @@ function createColorsTableHtml(p, q, idx) {
         <span style="font-size:13px; background:#e5e7eb; padding:2px 6px; border-radius:4px; color:#111;">Custo Total da Qtd: <b>${fmt(s.tcR)}</b></span>
         <span style="font-size:11px;">Emb/Fita/Aces: ${fmt((s.pPkg+s.cTape+s.cAcc)*q.qty)} | Ads: ${fmt(s.pAds*q.qty)} | Shopee: ${fmt(s.prS >= 8 ? s.prS * FEE_PCT + FEE_FIXED : s.prS * 0.50)} | Imposto: ${fmt(s.prS*(p.taxPct||0)/100)} </span>
       </div>
-      <div style="margin-bottom:8px;">
-        <div style="font-size:11px; font-weight:700; color:var(--text-tertiary); margin-bottom:4px;">Margem %</div>
+        <div style="font-size:11px; font-weight:700; color:var(--text-tertiary); margin-bottom:4px; display:flex; justify-content:space-between;">
+          <span>Margem %</span>
+          <span style="font-size:10px; color:var(--purple); opacity:0.8;">Progresso: ${Math.round(s.cs.margin)}%</span>
+        </div>
         <div style="display:flex; align-items:center; gap:6px;">
-          <input type="range" class="purple-slider" style="flex:1; min-width:0;" min="1" max="60" step="0.01" value="${s.cs.margin}" oninput="onColorMarginInput(${idx}, '${c.name}', this.value)" onchange="updateQtyCard(${idx})">
+          <div style="flex:1; position:relative; height:6px; background:#e5e7eb; border-radius:3px; overflow:hidden;">
+            <div id="progress-bar-${idx}-${safeName}" style="position:absolute; left:0; top:0; height:100%; width:${Math.min(100, (s.cs.margin/60)*100)}%; background:var(--purple); transition:width 0.2s;"></div>
+            <input type="range" class="purple-slider" style="position:absolute; inset:0; opacity:0; z-index:2; cursor:pointer;" min="1" max="60" step="0.01" value="${s.cs.margin}" oninput="onColorMarginInput(${idx}, '${c.name}', this.value)" onchange="updateQtyCard(${idx})">
+          </div>
           <div style="display:flex; align-items:center; gap:1px; min-width:48px; justify-content:flex-end;">
-            <input type="text" inputmode="numeric" id="margin-pct-${idx}-${c.name.replace(/\s+/g,'-')}" style="font-size:14px; font-weight:800; width:32px; text-align:right; border:none; border-bottom:2px solid var(--purple); color:var(--purple); outline:none; background:transparent;" value="${Number(s.cs.margin).toFixed(0)}" onblur="onColorMarginManual(${idx}, '${c.name}', this.value)" onkeyup="if(event.key==='Enter') this.blur();">
+            <input type="text" inputmode="numeric" id="margin-pct-${idx}-${safeName}" style="font-size:14px; font-weight:800; width:32px; text-align:right; border:none; border-bottom:2px solid var(--purple); color:var(--purple); outline:none; background:transparent;" value="${Number(s.cs.margin).toFixed(0)}" onblur="onColorMarginManual(${idx}, '${c.name}', this.value)" onkeyup="if(event.key==='Enter') this.blur();">
             <span style="font-size:12px; font-weight:800; color:var(--purple);">%</span>
           </div>
         </div>
-      </div>
       <div style="display:flex; gap:8px; align-items:flex-start;">
         <div style="flex:1; min-width:0;">
           <div style="font-size:11px; font-weight:700; color:var(--green); margin-bottom:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
@@ -1848,7 +1891,10 @@ function buildQtyCard(idx, q) {
 
           <div class="margin-row">
             <span class="margin-label">Margem Desejada:</span>
-            <input type="range" id="margin-range-${idx}" min="1" max="60" step="0.01" value="${q.margin}" oninput="onMarginInput(${idx}, this.value)" onchange="updateQtyCard(${idx})">
+            <div style="flex:1; position:relative; height:6px; background:#e5e7eb; border-radius:3px; overflow:hidden;">
+              <div id="progress-bar-main-${idx}" style="position:absolute; left:0; top:0; height:100%; width:${Math.min(100, (q.margin/60)*100)}%; background:var(--green); transition:width 0.2s;"></div>
+              <input type="range" id="margin-range-${idx}" style="position:absolute; inset:0; opacity:0; z-index:2; cursor:pointer;" min="1" max="60" step="0.01" value="${q.margin}" oninput="onMarginInput(${idx}, this.value)" onchange="updateQtyCard(${idx})">
+            </div>
             <div style="display:flex; align-items:center; min-width:45px;">
                ${wrapPct(`<input type="text" inputmode="numeric" id="margin-disp-${idx}" class="margin-display" style="width:100%; text-align:center; border:none; border-bottom:1px solid var(--text-primary); outline:none; background:transparent; font-size:14px; font-weight:800; padding:0; height:18px;" value="${Number(q.margin || 20).toFixed(0)}" onblur="onMarginManual(${idx}, this.value)" onkeyup="if(event.key==='Enter') this.blur();">`)}
             </div>
@@ -1931,6 +1977,9 @@ function updateQtyCard(idx) {
 
     document.getElementById(`margin-range-${idx}`).value = q.margin;
     document.getElementById(`margin-disp-${idx}`).value = Number(q.margin).toFixed(0);
+    if (document.getElementById(`progress-bar-main-${idx}`)) {
+      document.getElementById(`progress-bar-main-${idx}`).style.width = Math.min(100, (q.margin/60)*100) + '%';
+    }
   }
 
   let comparePrice = finalPrice;
@@ -1955,11 +2004,26 @@ function resetAnuncio(idx) {
 }
 
 function onAnuncioBlur(idx, raw) {
-  if (raw.trim() === '') {
-    currentProduct.quantities[idx].manualAdPrice = null;
-  } else {
-    currentProduct.quantities[idx].manualAdPrice = parseBR(raw);
+  const q = currentProduct.quantities[idx];
+  const p = parseBR(raw);
+  if (!raw || raw.trim() === '' || p <= 0) { 
+    q.manualAdPrice = null; 
+    updateQtyCard(idx);
+    return;
   }
+  
+  q.manualAdPrice = p;
+  
+  // Interlink: Back-calculate Price from Registered
+  const markup = anuncioPct(idx);
+  const newPrice = p / (1 + markup);
+  q.manualPrice = newPrice;
+  
+  // Interlink: Back-calculate Margin from new Price
+  const cpu = calcCostPerUnit(currentProduct);
+  const tc  = cpu * q.qty;
+  q.margin = Math.min(80, Math.max(1, marginFromPrice(tc, newPrice, currentProduct)));
+  
   updateQtyCard(idx);
 }
 
@@ -2082,25 +2146,49 @@ function onMarginChange(idx, v) {
 }
 function onMargin(idx, v) { onMarginInput(idx, v); updateQtyCard(idx); }
 
-function onAdBlur(idx, raw) {
-  const q = currentProduct.quantities[idx];
-  if (!raw || raw.trim() === '' || parseBR(raw) <= 0) { q.manualAdPrice = null; }
-  else { q.manualAdPrice = parseBR(raw); }
-  updateQtyCard(idx);
-}
-function resetAd(idx) {
-  currentProduct.quantities[idx].manualAdPrice = null;
-  updateQtyCard(idx);
-}
-
 function onPriceBlur(idx, raw) {
   const price = parseBR(raw);
   const cpu   = calcCostPerUnit(currentProduct);
   const tc    = cpu * currentProduct.quantities[idx].qty;
   if (price <= 0) { currentProduct.quantities[idx].manualPrice = null; updateQtyCard(idx); return; }
   currentProduct.quantities[idx].manualPrice = price;
+  
+  // Interlink: Back-calculate Margin from Price
   const margin = Math.min(60, Math.max(1, marginFromPrice(tc, price, currentProduct)));
   currentProduct.quantities[idx].margin = margin;
+  
+  // Interlink: Update Registered Price (if not manual)
+  if (currentProduct.quantities[idx].manualAdPrice == null) {
+     const pct = anuncioPct(idx);
+     const autoAd = price * (1 + pct);
+     const adInput = document.getElementById(`anuncio-${idx}`);
+     if (adInput) adInput.value = fmtIn(autoAd);
+  }
+  
+  updateQtyCard(idx);
+}
+
+function onAdBlur(idx, raw) {
+  const q = currentProduct.quantities[idx];
+  const p = parseBR(raw);
+  if (!raw || raw.trim() === '' || p <= 0) { 
+    q.manualAdPrice = null; 
+    updateQtyCard(idx);
+    return;
+  }
+  
+  q.manualAdPrice = p;
+  
+  // Interlink: Back-calculate Price from Registered
+  const markup = anuncioPct(idx);
+  const newPrice = p / (1 + markup);
+  q.manualPrice = newPrice;
+  
+  // Interlink: Back-calculate Margin from new Price
+  const cpu = calcCostPerUnit(currentProduct);
+  const tc  = cpu * q.qty;
+  q.margin = Math.min(60, Math.max(1, marginFromPrice(tc, newPrice, currentProduct)));
+  
   updateQtyCard(idx);
 }
 
@@ -2130,6 +2218,31 @@ function readFormIntoProduct() {
   if (el('packaging'))       currentProduct.packagingCost   = parseBR(el('packaging').value);
   if (el('ads-cost'))        currentProduct.adsCost         = parseBR(el('ads-cost').value);
   if (el('failure-pct'))     currentProduct.failurePct      = parseBR(el('failure-pct').value);
+}
+
+function onAds(val) {
+  if (currentProduct) {
+    currentProduct.adsCost = parseBR(val);
+    renderAllQtyCards();
+  }
+}
+function onFailure(val) {
+  if (currentProduct) {
+    currentProduct.failurePct = parseBR(val);
+    renderAllQtyCards();
+  }
+}
+function onTax(val) {
+  if (currentProduct) {
+    currentProduct.taxPct = parseBR(val);
+    renderAllQtyCards();
+  }
+}
+function onPackaging(val) {
+  if (currentProduct) {
+    currentProduct.packagingCost = parseBR(val);
+    renderAllQtyCards();
+  }
 }
 
 // ---- HELPERS ----
@@ -2172,8 +2285,14 @@ function onColorMarginInput(idx, cName, val) {
   const priceInput = document.getElementById(`price-in-${idx}-${safeName}`);
   if (priceInput) priceInput.value = fmtIn(s.prS);
 
-  const profitDiv = document.getElementById(`profit-disp-${idx}-${safeName}`);
-  if (profitDiv) profitDiv.innerText = `Lucro: R$ ${fmt(s.res.profit)}`;
+  // Update Registered (Cadastrado)
+  const adInput = document.getElementById(`ad-in-${idx}-${safeName}`);
+  if (adInput) adInput.value = fmtIn(s.anuncioVal);
+  const adBadge = document.getElementById(`ad-badge-${idx}-${safeName}`);
+  if (adBadge) {
+    const pct = anuncioPct(idx);
+    adBadge.innerText = `+${Math.round(pct * 100)}%`;
+  }
 }
 function onColorMarginChange(idx, cName, val) {
   updateQtyCard(idx);
@@ -2189,6 +2308,20 @@ function onMarginManual(idx, val) {
   if(v < 1) v = 1; if(v > 999) v = 999;
   q.margin = v;
   q.manualPrice = null;
+  
+  // Interlink: Update Price and Registered
+  const cpu = calcCostPerUnit(currentProduct);
+  const totalCost = cpu * q.qty;
+  const newPrice = priceFromMargin(totalCost, v, currentProduct);
+  
+  const priceInput = document.getElementById(`price-in-${idx}`);
+  if (priceInput) priceInput.value = fmtIn(newPrice);
+  
+  const markup = anuncioPct(idx);
+  const autoAd = newPrice * (1 + markup);
+  const adInput = document.getElementById(`anuncio-${idx}`);
+  if (adInput) adInput.value = fmtIn(autoAd);
+
   updateQtyCard(idx);
 }
 
@@ -2251,22 +2384,36 @@ function onColorPriceInput(idx, cName, raw) {
 function onColorAdInput(idx, cName, val) {
   const q = currentProduct.quantities[idx];
   const cs = getCS(q, cName);
-  if (val.trim() === '') {
-    cs.manualAdPrice = null;
-  } else {
-    cs.manualAdPrice = parseBR(val);
-  }
+  const p = parseBR(val);
+  if (p <= 0) return;
+
+  cs.manualAdPrice = p;
   
+  // Interlink: Back-calculate Venda Final (Price) from Registered
+  // Cadastrado = Venda Final * (1 + markup) -> Venda Final = Cadastrado / (1 + markup)
+  const markup = anuncioPct(idx);
+  const newPrice = p / (1 + markup);
+  cs.manualPrice = newPrice;
+
+  // Recalculate Margin from new Price
+  const c = currentProduct.selectedColors.find(x => x.name === cName);
+  const tcR = calcColorCost(currentProduct, c) * q.qty;
+  cs.margin = Math.min(80, Math.max(1, marginFromPrice(tcR, newPrice, currentProduct)));
+
   const safeName = cName.replace(/\s+/g, '-');
+  
+  // Update Price Input
+  const priceInput = document.getElementById(`price-in-${idx}-${safeName}`);
+  if (priceInput) priceInput.value = fmtIn(newPrice);
+  
+  // Update Margin Display & Slider
+  const marginDisp = document.getElementById(`margin-pct-${idx}-${safeName}`);
+  if (marginDisp) marginDisp.value = Math.round(cs.margin);
+  const slider = document.querySelector(`#qcard-${idx} input[type=range][oninput*="'${cName}'"]`);
+  if (slider) slider.value = cs.margin;
+
   const adBadge = document.getElementById(`ad-badge-${idx}-${safeName}`);
-  if (adBadge) {
-    const c = currentProduct.selectedColors.find(x => x.name === cName);
-    const tcR = calcColorCost(currentProduct, c) * q.qty;
-    const price = cs.manualPrice != null ? cs.manualPrice : priceFromMargin(tcR, cs.margin, currentProduct);
-    const curAd = cs.manualAdPrice != null ? cs.manualAdPrice : price * (1 + anuncioPct(idx));
-    const pct = price > 0 ? Math.round(((curAd - price) / price) * 100) : 0;
-    adBadge.innerText = `+${pct}%`;
-  }
+  if (adBadge) adBadge.innerText = `+${Math.round(markup * 100)}%`;
 }
 
 function resetColorAd(idx, cName) {
@@ -2343,17 +2490,22 @@ function saveColorMaterial(cName, idx) {
 if (!NEEDS_SETUP) {
   auth.onAuthStateChanged(user => {
     setLoading(false);
-    if (user) {
+    if (user && user.uid) {
       currentUser = user;
       el('login-screen').style.display = 'none';
       el('app').classList.add('visible');
       el('user-email').textContent = user.email;
-      el('user-avatar').textContent = user.email[0].toUpperCase();
+      el('user-avatar').textContent = user.email ? user.email[0].toUpperCase() : 'U';
       loadProducts();
     } else {
       currentUser = null;
       el('login-screen').style.display = 'flex';
       el('app').classList.remove('visible');
+      // Clear sensitive state
+      products = [];
+      currentProduct = null;
+      renderProductList();
+      showEmptyState();
     }
   });
 } else {
