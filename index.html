@@ -1879,7 +1879,7 @@ function buildQtyCard(idx, q) {
         </div>
       </div>
 
-      <div class="qty-card-content" id="qty-content-${idx}" style="display: ${isCollapsed ? 'none' : 'block'}">
+      <div class="qty-card-content" id="qty-content-${idx}">
         <div id="colortable-${idx}"></div>
 
         <div id="main-qty-content-${idx}" style="display:${displayMain};">
@@ -1950,11 +1950,11 @@ function updateQtyCard(idx) {
   if (isMultiColor) {
     document.getElementById(`colortable-${idx}`).innerHTML = createColorsTableHtml(p, q, idx);
     if (document.getElementById(`main-qty-content-${idx}`)) document.getElementById(`main-qty-content-${idx}`).style.display = 'none';
-    if (document.getElementById(`qcard-${idx}`).querySelector('.price-wrap')) document.getElementById(`qcard-${idx}`).querySelector('.price-wrap').style.display = 'none';
+    if (document.getElementById(`qty-card-${idx}`).querySelector('.price-wrap')) document.getElementById(`qty-card-${idx}`).querySelector('.price-wrap').style.display = 'none';
   } else {
     document.getElementById(`colortable-${idx}`).innerHTML = '';
     if (document.getElementById(`main-qty-content-${idx}`)) document.getElementById(`main-qty-content-${idx}`).style.display = 'block';
-    if (document.getElementById(`qcard-${idx}`).querySelector('.price-wrap')) document.getElementById(`qcard-${idx}`).querySelector('.price-wrap').style.display = 'block';
+    if (document.getElementById(`qty-card-${idx}`).querySelector('.price-wrap')) document.getElementById(`qty-card-${idx}`).querySelector('.price-wrap').style.display = 'block';
   }
 
   const cpu = calcCostPerUnit(p);
@@ -2091,7 +2091,9 @@ function toggleQtyCard(idx) {
   const icon = card.querySelector('.icon-chevron');
   if (icon) icon.style.transform = q.collapsed ? 'rotate(0deg)' : 'rotate(180deg)';
   
-  // Save local state to Firebase
+  // Force data update when opening
+  if (!q.collapsed) updateQtyCard(idx);
+  
   saveProductSilently();
 }
 
