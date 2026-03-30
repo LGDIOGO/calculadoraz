@@ -340,6 +340,7 @@
     .qty-card-header { display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid var(--border); padding-bottom: 12px; margin-bottom: 12px; transition: background 0.2s; flex-wrap: wrap; }
 .qty-card-header:hover { background: #f8fafc; }
 .qty-card.collapsed .qty-card-header { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+.qty-card.collapsed .qty-card-content { display: none !important; }
 .qty-card-content { transition: all 0.2s ease-in-out; }
     .qty-label-wrap { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; }
     .qty-label-input {
@@ -1867,11 +1868,11 @@ function buildQtyCard(idx, q) {
   const isCollapsed = q.collapsed === true;
 
   return `
-    <div class="qty-card ${isCollapsed ? 'collapsed' : ''}" id="qcard-${idx}">
+    <div class="qty-card ${isCollapsed ? 'collapsed' : ''}" id="qty-card-${idx}">
       <div class="qty-card-header" onclick="toggleQtyCard(${idx})" style="cursor:pointer; user-select:none; display:flex; align-items:center; justify-content:space-between; gap:12px;">
         <div class="qty-label-wrap" style="display:flex; align-items:center; gap:8px;">
           <div class="qty-number-badge"><input type="text" inputmode="numeric" class="qty-number-input" value="${q.qty}" oninput="onQtyNum(${idx}, this.value)" onclick="event.stopPropagation()"> un</div>
-          <svg style="width:16px; height:16px; transition:transform 0.2s; transform:rotate(${isCollapsed ? '0' : '180'}deg); color:var(--text-tertiary);" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+          <svg class="icon-chevron" style="width:16px; height:16px; transition:transform 0.2s; transform:rotate(${isCollapsed ? '0' : '180'}deg); color:var(--text-tertiary);" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
         </div>
         <div class="price-wrap" style="display:${displayMain}; flex:1; min-width:0;">
           ${wrapR$(`<input type="text" inputmode="decimal" class="price-main-input req" id="price-in-${idx}" value="${fmtIn(priceFromMargin(calcCostPerUnit(currentProduct)*q.qty, q.margin, currentProduct))}" onblur="onPriceBlur(${idx}, this.value)" onclick="event.stopPropagation()">`)}
